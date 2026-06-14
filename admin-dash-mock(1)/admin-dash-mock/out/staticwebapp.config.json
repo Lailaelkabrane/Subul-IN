@@ -1,0 +1,29 @@
+{
+  "routes": [
+    { "route": "/login",         "rewrite": "/login.html" },
+    { "route": "/login.html",    "rewrite": "/login.html" },
+    { "route": "/dashboard",     "rewrite": "/dashboard.html" },
+    { "route": "/dashboard.html","rewrite": "/dashboard.html" },
+    { "route": "/privacy",       "rewrite": "/privacy.html" },
+    { "route": "/privacy.html",  "rewrite": "/privacy.html" },
+    { "route": "/terms",         "rewrite": "/terms.html" },
+    { "route": "/terms.html",    "rewrite": "/terms.html" }
+  ],
+  "responseOverrides": {
+    "404": { "rewrite": "/index.html", "statusCode": 200 }
+  },
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": [
+      "/_next/*",
+      "/*.css",
+      "/*.js",
+      "/*.png",
+      "/*.ico",
+      "/*.svg",
+      "/*.json",
+      "/*.html",
+      "/*.txt"
+    ]
+  }
+}

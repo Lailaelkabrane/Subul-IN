@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy - Subul IN</title>
+  <meta name="description" content="Privacy Policy for Subul IN, the AI LinkedIn copilot Chrome extension." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #f9fafb;
+      --surface: #ffffff;
+      --border:  #e5e7eb;
+      --text:    #111827;
+      --sub:     #6b7280;
+      --accent:  #0a66c2;
+      --accent-light: #eff6ff;
+      --danger:  #dc2626;
+      --success: #16a34a;
+      --radius:  12px;
+      --shadow:  0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* ── Nav ── */
+    .nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      color: var(--text);
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .nav-logo svg { flex-shrink: 0; }
+    .nav-badge {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--sub);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2px 10px;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      background: linear-gradient(135deg, #0a66c2 0%, #1d4ed8 100%);
+      color: #fff;
+      padding: 56px 24px 48px;
+      text-align: center;
+    }
+    .hero-icon {
+      width: 56px; height: 56px;
+      background: rgba(255,255,255,.18);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .hero h1 { font-size: clamp(24px, 5vw, 36px); font-weight: 800; margin-bottom: 10px; }
+    .hero p  { font-size: 16px; opacity: .85; max-width: 500px; margin: 0 auto 20px; }
+    .hero-meta {
+      display: inline-flex; gap: 24px; flex-wrap: wrap; justify-content: center;
+      font-size: 13px; opacity: .75;
+    }
+    .hero-meta span { display: flex; align-items: center; gap: 5px; }
+
+    /* ── Layout ── */
+    .container {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 40px 20px 80px;
+    }
+
+    /* ── TOC ── */
+    .toc {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      margin-bottom: 40px;
+      box-shadow: var(--shadow);
+    }
+    .toc h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--sub); margin-bottom: 14px; }
+    .toc ol  { padding-left: 20px; display: grid; gap: 6px; }
+    .toc li  { font-size: 14px; }
+    .toc a   { color: var(--accent); text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+
+    /* ── Section card ── */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+      scroll-margin-top: 72px;
+    }
+    .section-header {
+      display: flex; align-items: flex-start; gap: 14px;
+      margin-bottom: 20px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+    .section-icon svg { width: 20px; height: 20px; }
+    .section-num { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
+    .section h2 { font-size: 18px; font-weight: 700; }
+
+    p  { margin-bottom: 14px; }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 22px; margin-bottom: 14px; display: grid; gap: 6px; }
+    li { color: var(--text); }
+
+    /* ── Data grid ── */
+    .data-grid {
+      display: grid;
+      gap: 10px;
+      margin: 16px 0;
+    }
+    .data-row {
+      display: flex; align-items: flex-start; gap: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .data-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 6px;
+    }
+    .dot-blue   { background: var(--accent); }
+    .dot-green  { background: var(--success); }
+    .dot-orange { background: #d97706; }
+    .dot-red    { background: var(--danger); }
+    .data-label { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+    .data-desc  { font-size: 13px; color: var(--sub); }
+
+    /* ── Info box ── */
+    .info-box {
+      display: flex; gap: 12px; align-items: flex-start;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+    .info-box svg { flex-shrink: 0; margin-top: 1px; }
+    .info-blue   { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+    .info-green  { background: #f0fdf4; color: #14532d; border: 1px solid #bbf7d0; }
+    .info-red    { background: #fef2f2; color: #7f1d1d; border: 1px solid #fecaca; }
+    .info-amber  { background: #fffbeb; color: #78350f; border: 1px solid #fde68a; }
+
+    /* ── Third-party table ── */
+    .tp-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 14px 0; }
+    .tp-table th {
+      background: var(--bg); padding: 8px 12px;
+      font-weight: 600; text-align: left;
+      border-bottom: 2px solid var(--border);
+      color: var(--sub); font-size: 12px; text-transform: uppercase; letter-spacing: .4px;
+    }
+    .tp-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .tp-table tr:last-child td { border-bottom: none; }
+    .tp-table tr:hover td { background: var(--bg); }
+
+    /* ── Rights grid ── */
+    .rights-grid { display: grid; gap: 10px; margin: 16px 0; }
+    @media (min-width: 600px) { .rights-grid { grid-template-columns: 1fr 1fr; } }
+    .right-card {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 14px;
+    }
+    .right-card-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+    .right-card-desc  { font-size: 12px; color: var(--sub); }
+
+    /* ── Contact card ── */
+    .contact-card {
+      background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%);
+      border: 1px solid #c7d2fe;
+      border-radius: var(--radius);
+      padding: 24px;
+      text-align: center;
+      margin-top: 20px;
+    }
+    .contact-card h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; color: #1e3a8a; }
+    .contact-card p  { font-size: 14px; color: #3730a3; margin-bottom: 12px; }
+    .contact-card a  {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--accent); color: #fff;
+      text-decoration: none; border-radius: 8px;
+      padding: 9px 18px; font-size: 14px; font-weight: 600;
+    }
+    .contact-card a:hover { background: #0950a0; }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 24px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--sub);
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+
+    /* ── At-a-Glance pillars ── */
+    .pillars {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 40px;
+    }
+    @media (min-width: 600px) { .pillars { grid-template-columns: repeat(4, 1fr); } }
+    .pillar {
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 14px;
+      text-align: center;
+      box-shadow: var(--shadow);
+    }
+    .pillar-icon { font-size: 28px; margin-bottom: 8px; }
+    .pillar-title { font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+    .pillar-desc  { font-size: 11px; color: var(--sub); line-height: 1.5; }
+
+    /* ── Permissions table ── */
+    .perm-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 14px 0; }
+    .perm-table th {
+      background: var(--bg); padding: 8px 12px;
+      font-weight: 600; text-align: left;
+      border-bottom: 2px solid var(--border);
+      color: var(--sub); font-size: 12px; text-transform: uppercase; letter-spacing: .4px;
+    }
+    .perm-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .perm-table tr:last-child td { border-bottom: none; }
+    .perm-table tr:hover td { background: var(--bg); }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .section { padding: 20px; }
+      .hero    { padding: 36px 16px 30px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav class="nav">
+  <a class="nav-logo" href="https://app.subul.uk" rel="noopener noreferrer">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0a66c2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>
+    </svg>
+    Subul IN
+  </a>
+  <span class="nav-badge">v3.2.0</span>
+</nav>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="hero-icon">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+  </div>
+  <h1>Privacy Policy</h1>
+  <p>Subul IN - AI LinkedIn Copilot Chrome Extension</p>
+  <div class="hero-meta">
+    <span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Effective: May 31, 2026
+    </span>
+    <span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.22-8.56"/><polyline points="22 4 12 14.01 9 11"/></svg>
+      Last Updated: May 31, 2026
+    </span>
+    <span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Version 3.2.0
+    </span>
+    <span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      Designed around common GDPR and CCPA privacy principles
+    </span>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="info-box info-green" style="margin-top:20px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+    <div>Subul IN does not sell personal data, does not use personal data for advertising, and does not use user data to train foundation models.</div>
+  </div>
+
+  <!-- Table of Contents -->
+  <div class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#glance">Privacy at a Glance</a></li>
+      <li><a href="#s1">Introduction and Overview</a></li>
+      <li><a href="#s2">Data We Collect (Collection)</a></li>
+      <li><a href="#s3">How We Process Data (Processing)</a></li>
+      <li><a href="#s4">Storage and Retention (Storage)</a></li>
+      <li><a href="#s5">Data Sharing (Sharing)</a></li>
+      <li><a href="#s6">Chrome Extension Permissions</a></li>
+      <li><a href="#s7">Data We Do Not Collect</a></li>
+      <li><a href="#s8">Security Measures</a></li>
+      <li><a href="#s9">International Data Transfers</a></li>
+      <li><a href="#s10">Children's Privacy</a></li>
+      <li><a href="#s11">Changes to This Policy</a></li>
+      <li><a href="#s12">User Rights and Deletion</a></li>
+      <li><a href="#s13">Chrome Web Store Limited Use Compliance</a></li>
+      <li><a href="#s14">Compliance and Contact</a></li>
+    </ol>
+  </div>
+
+  <!-- At a Glance -->
+  <div id="glance" style="scroll-margin-top:72px; margin-bottom:24px;">
+    <h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--sub);margin-bottom:14px;">Privacy at a Glance - Four Pillars (Collection / Processing / Storage / Sharing)</h2>
+    <div class="pillars">
+      <div class="pillar">
+        <div class="pillar-icon">📥</div>
+        <div class="pillar-title">Collection (Collecte)</div>
+        <div class="pillar-desc">Profile data you explicitly extract, account email, telemetry, and target profile snippets when you trigger an action.</div>
+      </div>
+      <div class="pillar">
+        <div class="pillar-icon">⚙️</div>
+        <div class="pillar-title">Processing (Traitement)</div>
+        <div class="pillar-desc">AI generation via Microsoft Azure OpenAI Service, rule-based scoring, authentication relay, and diagnostics.</div>
+      </div>
+      <div class="pillar">
+        <div class="pillar-icon">🔒</div>
+        <div class="pillar-title">Storage (Stockage)</div>
+        <div class="pillar-desc">Microsoft Azure Cosmos DB with AES-256 at rest, TLS in transit, and local cache in chrome.storage.local.</div>
+      </div>
+      <div class="pillar">
+        <div class="pillar-icon">🔗</div>
+        <div class="pillar-title">Sharing (Partage)</div>
+        <div class="pillar-desc">Shared only with Microsoft Azure services and Subul platform as needed. Never sold.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 1 -->
+  <div class="section" id="s1">
+    <div class="section-header">
+      <div class="section-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div>
+        <div class="section-num">Section 1</div>
+        <h2>Introduction and Overview</h2>
+      </div>
+    </div>
+
+    <p>Subul IN is an AI-powered professional productivity assistant designed to help users optimize their LinkedIn presence. The extension generates posts, evaluates profile quality, identifies skill gaps, and provides networking insights.</p>
+    <p>Subul IN is developed and operated by Smartovate Technologies ("Smartovate"), a Microsoft Partner. Subul IN is part of the broader Subul educational and professional development platform designed to support university students and early-career professionals.</p>
+    <p>The extension is integrated with the Subul ecosystem, an AI-powered educational and career development platform that helps university students improve employability, professional networking, and career readiness.</p>
+    <p>We adhere to the Principle of Least Privilege and collect only the data required to deliver these features. We do not sell your data and do not use it for advertising or profiling.</p>
+
+    <div class="info-box info-green">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      <div>Subul IN does not sell personal data, does not display third-party advertising, and does not use collected data for advertising or marketing profiling.</div>
+    </div>
+  </div>
+
+  <!-- Section 2 -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <div class="section-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div>
+        <div class="section-num">Section 2</div>
+        <h2>Data We Collect (Collection / Collecte)</h2>
+      </div>
+    </div>
+
+    <div class="data-grid">
+      <div class="data-row">
+        <span class="data-dot dot-blue"></span>
+        <div>
+          <div class="data-label">Personal and authentication data</div>
+          <div class="data-desc">Email address, user name, and authentication tokens or session information retrieved from Subul-owned domains (https://*.subul.uk) to keep you signed in. Notification preferences if enabled.</div>
+        </div>
+      </div>
+      <div class="data-row">
+        <span class="data-dot dot-green"></span>
+        <div>
+          <div class="data-label">LinkedIn profile data</div>
+          <div class="data-desc">Profile information visible to the user in their browser such as headline, work history, skills, certifications, education, and posts when you click Analyze, Scan, or Generate.</div>
+        </div>
+      </div>
+      <div class="data-row">
+        <span class="data-dot dot-orange"></span>
+        <div>
+          <div class="data-label">Networking analysis data</div>
+          <div class="data-desc">Profile information visible in the user's active browser tab used for user-requested networking compatibility analysis and professional recommendations.</div>
+        </div>
+      </div>
+      <div class="data-row">
+        <span class="data-dot dot-blue"></span>
+        <div>
+          <div class="data-label">Networking goals and preferences</div>
+          <div class="data-desc">Industries, seniority, and objectives you enter in settings to personalize scoring.</div>
+        </div>
+      </div>
+      <div class="data-row">
+        <span class="data-dot dot-green"></span>
+        <div>
+          <div class="data-label">Technical and telemetry data</div>
+          <div class="data-desc">Endpoint status codes, request latency, and error types. We do not collect browsing history or device identifiers, and we do not use IP addresses for tracking or advertising.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-box info-blue">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div>All collection is user-initiated. The extension does not collect LinkedIn data in the background or while the user is not actively using the extension.</div>
+    </div>
+
+    <p><strong>User control:</strong> The extension only activates analysis and AI features after a direct user action such as clicking Analyze, Generate, or Scan.</p>
+    <p>By using Subul IN features such as Analyze, Generate, or Scan, you consent to the processing described in this Privacy Policy.</p>
+    <p>By installing and using the extension, users explicitly consent to the collection and processing practices described in this Privacy Policy.</p>
+    <p>Subul IN accesses LinkedIn page content only while the user is actively viewing a LinkedIn page and only after a direct user action. The extension does not automatically collect profile data in the background.</p>
+    <p>The extension does not continuously monitor LinkedIn activity and does not collect LinkedIn profile data in the background without direct user interaction.</p>
+    <p><strong>Telemetry use:</strong> Telemetry is used exclusively for reliability, debugging, abuse prevention, and service performance monitoring.</p>
+
+    <div class="info-box info-green">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      <div>We do not collect LinkedIn passwords, private messages, payment data, or browsing history outside LinkedIn.</div>
+    </div>
+  </div>
+
+  <!-- Section 3 -->
+  <div class="section" id="s3">
+    <div class="section-header">
+      <div class="section-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+      </div>
+      <div>
+        <div class="section-num">Section 3</div>
+        <h2>How We Process Data (Processing / Traitement)</h2>
+      </div>
+    </div>
+
+    <p><strong>Legal basis:</strong> We process data based on user consent and our legitimate interest in providing the requested productivity and AI analysis features.</p>
+    <ul>
+      <li><strong>AI post generation:</strong> Your prompt and profile snapshot are sent via HTTPS to our backend, which securely proxies the request to Microsoft Azure OpenAI Service.</li>
+      <li><strong>Profile scoring and gap analysis:</strong> Profile data selected by the user is analyzed locally in the browser whenever possible. Only the minimum profile content required for the requested analysis is transmitted to backend AI services.</li>
+      <li><strong>Authentication relay:</strong> The extension retrieves authentication tokens or session information from Subul-owned domains (https://*.subul.uk) to keep the user signed in.</li>
+    </ul>
+
+    <p>By triggering AI-powered features such as Analyze, Generate, or Scan, the user explicitly requests processing of the selected content through Subul IN backend services and Microsoft Azure OpenAI Service infrastructure.</p>
+
+    <div class="info-box info-blue">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div>AI requests are processed through Microsoft Azure OpenAI Service hosted by Microsoft. Data submitted through Microsoft Azure OpenAI Service is not used to train OpenAI or Microsoft foundation models.</div>
+    </div>
+
+    <p>AI prompts and generated content are retained only for as long as needed to deliver the request, support the user, investigate abuse, or meet legal and security obligations. Where they are no longer needed, they are deleted or de-identified according to our retention schedule.</p>
+
+    <p><strong>Data minimization:</strong> We apply data minimization principles and transmit only the minimum data required to fulfill the requested feature.</p>
+    <p>AI prompts and generated content are not routinely reviewed by humans unless required for security investigations, abuse prevention, or user-requested support.</p>
+
+    <h3 style="font-size:15px;font-weight:700;margin:20px 0 10px;">AI Model Training</h3>
+    <p>Subul IN does not use your personal data, LinkedIn profile content, prompts, or generated outputs to train proprietary AI models.</p>
+    <p>Generated AI outputs may contain inaccuracies or incomplete recommendations and should be reviewed by users before professional use.</p>
+    <p>AI-generated scores and recommendations are informational only and are not used for automated employment decisions, eligibility determination, or legal profiling.</p>
+  </div>
+
+  <!-- Section 4 -->
+  <div class="section" id="s4">
+    <div class="section-header">
+      <div class="section-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <div>
+        <div class="section-num">Section 4</div>
+        <h2>Storage and Retention (Storage / Stockage)</h2>
+      </div>
+    </div>
+
+    <div class="data-grid">
+      <div class="data-row"><span class="data-dot dot-blue"></span><div><div class="data-label">Local storage</div><div class="data-desc">chrome.storage.local caches your profile snapshot and UI state. chrome.storage.sync stores limited authentication state and non-sensitive settings like server URL and language. Authentication state is time-limited and transmitted only over HTTPS.</div></div></div>
+      <div class="data-row"><span class="data-dot dot-blue"></span><div><div class="data-label">Cloud storage</div><div class="data-desc">Data synced with the backend is stored in Microsoft Azure Cosmos DB. Encryption at rest uses AES-256.</div></div></div>
+      <div class="data-row"><span class="data-dot dot-blue"></span><div><div class="data-label">In-transit security</div><div class="data-desc">All traffic uses TLS 1.2+ / HTTPS between the extension, backend, Cosmos DB, and Microsoft Azure OpenAI Service.</div></div></div>
+    </div>
+
+    <p>Local browser storage remains under the user's browser environment and may be cleared by the user at any time through browser settings.</p>
+    <p>Authentication tokens stored locally are time-limited session tokens and are not accessible to websites visited by the user.</p>
+
+    <h3 style="font-size:15px;font-weight:700;margin:20px 0 10px;">Retention by document type</h3>
+    <table class="tp-table">
+      <thead>
+        <tr>
+          <th>Document Type</th>
+          <th>Stored Elements</th>
+          <th>Data Lifetime</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>user</strong></td><td>Email, display name, account creation date, subscription state, options</td><td>Retained while the account remains active or until deletion is requested</td></tr>
+        <tr><td><strong>profile_snapshot</strong></td><td>LinkedIn profile data (experiences, skills, posts)</td><td>Retained while the account remains active or until deletion is requested</td></tr>
+        <tr><td><strong>linkedin_profile_cache</strong></td><td>Temporary profile analysis cache</td><td>30-day TTL</td></tr>
+        <tr><td><strong>cache</strong></td><td>Ephemeral locks and throttling records</td><td>Minutes to hours TTL</td></tr>
+        <tr><td><strong>networking_goal</strong></td><td>Industry, seniority, target role and region</td><td>Persistent until updated or deleted</td></tr>
+        <tr><td><strong>usage_log</strong></td><td>Endpoint metadata (timestamp, action, latency)</td><td>90 days</td></tr>
+        <tr><td><strong>weekly_stats_record</strong></td><td>Aggregate usage counts</td><td>1 year</td></tr>
+        <tr><td><strong>ai_score_record / gap_analysis_record</strong></td><td>AI metrics and recommendations</td><td>6 months</td></tr>
+        <tr><td><strong>chat_record</strong></td><td>Chat routing records</td><td>30 days</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Section 5 -->
+  <div class="section" id="s5">
+    <div class="section-header">
+      <div class="section-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      </div>
+      <div>
+        <div class="section-num">Section 5</div>
+        <h2>Data Sharing (Sharing / Partage)</h2>
+      </div>
+    </div>
+
+    <p>We do not sell, rent, or share personal data with advertisers or data brokers. Data is shared only with approved subprocessors to deliver features you use.</p>
+    <p>We do not sell personal information as defined under the California Consumer Privacy Act (CCPA).</p>
+
+    <div class="info-box info-green">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+      <div>
+        Subul IN does not sell personal data, does not use personal data for advertising, and does not use user data to train AI models.
+      </div>
+    </div>
+
+    <table class="tp-table">
+      <thead>
+        <tr>
+          <th>Service</th>
+          <th>Provider</th>
+          <th>Purpose</th>
+          <th>Data Shared</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Microsoft Azure OpenAI Service</strong></td>
+          <td>Microsoft</td>
+          <td>AI content generation and analysis. Microsoft acts as a data processor/subprocessor for AI services.</td>
+          <td>Prompt text and profile snippets needed for the request</td>
+        </tr>
+        <tr>
+          <td><strong>Microsoft Azure Cosmos DB</strong></td>
+          <td>Microsoft</td>
+          <td>Persistent storage for user documents. Microsoft acts as a data processor/subprocessor for cloud hosting.</td>
+          <td>Profile snapshots, usage logs, AI results</td>
+        </tr>
+        <tr>
+          <td><strong>Subul API</strong></td>
+          <td>Subul UK</td>
+          <td>Authentication and learning data sync</td>
+          <td>Email address and Subul access token</td>
+        </tr>
+        <tr>
+          <td><strong>Microsoft 365 Email Services</strong></td>
+          <td>Microsoft</td>
+          <td>Email notifications (optional)</td>
+          <td>Email address and notification content</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>Third-party services maintain their own independent privacy policies and security practices.</p>
+
+    <p>We may disclose information when required by law, legal process, regulatory request, or to protect the rights, safety, and security of users, the service, or others.</p>
+
+    <div class="info-box info-blue">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div>LinkedIn page content is accessed only within the user's active browser session and only after explicit user interaction. Subul IN does not scrape LinkedIn at scale, automate profile harvesting, or bypass LinkedIn access controls.</div>
+    </div>
+
+    <p>Subul IN is an independent productivity tool and is not affiliated with, endorsed by, or sponsored by LinkedIn Corporation.</p>
+  </div>
+
+  <!-- Section 6 -->
+  <div class="section" id="s6">
+    <div class="section-header">
+      <div class="section-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8.56 2.75c4.37 6.03 6.02 9.42 8.03 17.72m2.54-15.38c-3.72 4.35-8.94 5.66-16.88 5.85m19.5 1.9c-3.5-.93-6.63-.82-8.94 0-2.58.92-5.01 2.86-7.44 6.32"/></svg>
+      </div>
+      <div>
+        <div class="section-num">Section 6</div>
+        <h2>Chrome Extension Permissions</h2>
+      </div>
+    </div>
+
+    <p>Subul IN requests the following permissions. Each permission is used only for its stated purpose.</p>
+
+    <table class="perm-table">
+      <thead>
+        <tr>
+          <th>Permission</th>
+          <th>Purpose</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>storage</strong></td>
+          <td>Stores user preferences, cached profile data, consent flags, and authentication state.</td>
+        </tr>
+        <tr>
+          <td><strong>activeTab</strong></td>
+          <td>Detects the currently active LinkedIn tab and accesses page content only after an explicit user action such as Analyze, Generate, or Scan.</td>
+        </tr>
+        <tr>
+          <td><strong>scripting</strong></td>
+          <td>Injects the bundled analysis script into LinkedIn pages when activated by the user.</td>
+        </tr>
+        <tr>
+          <td><strong>alarms</strong></td>
+          <td>Runs scheduled background tasks such as reminders or cache cleanup.</td>
+        </tr>
+        <tr>
+          <td><strong>https://www.linkedin.com/*, https://linkedin.com/*</strong></td>
+          <td>Allows the extension to access LinkedIn page content rendered in the user's active browser tab for analysis.</td>
+        </tr>
+        <tr>
+          <td><strong>https://*.subul.uk/*</strong></td>
+          <td>Retrieves authentication tokens or session information and syncs Subul learning data.</td>
+        </tr>
+        <tr>
+          <td><strong>https://subulin-api.azurewebsites.net/*</strong></td>
+          <td>Connects to the Subul IN backend for AI analysis and data storage.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="info-box info-green">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      <div>The extension does not request tabs, cookies, webRequest, history, or all_urls permissions.</div>
+    </div>
+
+    <p>Host permissions are limited to LinkedIn pages and Subul-owned domains required for the features you use.</p>
+
+    <div class="info-box info-green">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      <div>Subul IN never accesses or stores LinkedIn login credentials, session cookies, or account passwords.</div>
+    </div>
+
+    <div class="info-box info-green">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      <div>Subul IN does not perform automated scraping, bulk profile harvesting, background crawling, or autonomous interaction with LinkedIn. Analysis occurs only on pages actively opened and selected by the user.</div>
+    </div>
+  </div>
+
+  <!-- Section 7 -->
+  <div class="section" id="s7">
+    <div class="section-header">
+      <div class="section-icon" style="background:#f0fdf4;color:#16a34a;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div>
+        <div class="section-num">Section 7</div>
+        <h2>Data We Do Not Collect</h2>
+      </div>
+    </div>
+
+    <ul>
+      <li>LinkedIn passwords or private messages.</li>
+      <li>Payment or billing information.</li>
+      <li>Browsing history outside LinkedIn.</li>
+      <li>Device identifiers or fingerprinting data.</li>
+      <li>Sensitive personal data such as health, biometric, or government ID data.</li>
+    </ul>
+  </div>
+
+  <!-- Section 8 -->
+  <div class="section" id="s8">
+    <div class="section-header">
+      <div class="section-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <div>
+        <div class="section-num">Section 8</div>
+        <h2>Security Measures</h2>
+      </div>
+    </div>
+
+    <ul>
+      <li><strong>HTTPS / TLS 1.2+:</strong> All API traffic is encrypted in transit.</li>
+      <li><strong>Encryption at rest:</strong> Microsoft Azure Cosmos DB uses AES-256 at rest.</li>
+      <li><strong>Access controls:</strong> Production access is restricted to authorized personnel only.</li>
+      <li><strong>Incident response:</strong> We maintain procedures for detecting, investigating, and responding to security incidents affecting user data.</li>
+      <li><strong>Token safety:</strong> Authentication tokens are stored using Chrome extension storage APIs and transmitted only over encrypted HTTPS connections.</li>
+    </ul>
+
+    <p>No electronic transmission or storage method is completely secure, but we use reasonable measures to reduce risk.</p>
+  </div>
+
+  <!-- Section 9 -->
+  <div class="section" id="s9">
+    <div class="section-header">
+      <div class="section-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      </div>
+      <div>
+        <div class="section-num">Section 9</div>
+        <h2>International Data Transfers</h2>
+      </div>
+    </div>
+
+    <p>Subul IN is hosted on Microsoft Azure. Depending on your location, your data may be processed or stored in the United States. Microsoft provides Standard Contractual Clauses (SCCs) and enterprise-grade protections for international transfers.</p>
+  </div>
+
+  <!-- Section 10 -->
+  <div class="section" id="s10">
+    <div class="section-header">
+      <div class="section-icon" style="background:#fef9ec;color:#d97706;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </div>
+      <div>
+        <div class="section-num">Section 10</div>
+        <h2>Children's Privacy</h2>
+      </div>
+    </div>
+
+    <p>Subul IN is intended for university students, professionals, and users aged 16 or older, or the minimum age required by applicable local law. It is not directed at children under 16. We do not knowingly collect data from children.</p>
+  </div>
+
+  <!-- Section 11 -->
+  <div class="section" id="s11">
+    <div class="section-header">
+      <div class="section-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6"/><path d="M2.5 12a10 10 0 0 1 17.8-6.3L21.5 8"/><path d="M2.5 22v-6h6"/><path d="M21.5 12a10 10 0 0 1-17.8 6.3L2.5 16"/></svg>
+      </div>
+      <div>
+        <div class="section-num">Section 11</div>
+        <h2>Changes to This Policy</h2>
+      </div>
+    </div>
+
+    <p>We may update this Privacy Policy as the product evolves. When we make material changes, we update the effective date and notify users in-app on the next extension launch.</p>
+  </div>
+
+  <!-- Section 12 -->
+  <div class="section" id="s12">
+    <div class="section-header">
+      <div class="section-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+      </div>
+      <div>
+        <div class="section-num">Section 12</div>
+        <h2>User Rights and Deletion</h2>
+      </div>
+    </div>
+
+    <h3 style="font-size:15px;font-weight:700;margin:20px 0 10px;">Your Choices</h3>
+    <ul>
+      <li>You may uninstall the extension at any time.</li>
+      <li>You may request deletion of stored cloud data.</li>
+      <li>You may disable notifications in settings.</li>
+      <li>You may stop using AI features without deleting your account.</li>
+    </ul>
+
+    <div class="rights-grid">
+      <div class="right-card">
+        <div class="right-card-title">Access and export</div>
+        <div class="right-card-desc">Request a copy of your data and a machine-readable export.</div>
+      </div>
+      <div class="right-card">
+        <div class="right-card-title">Opt out of collection</div>
+        <div class="right-card-desc">Disable or uninstall the extension to stop all data access and analysis features.</div>
+      </div>
+      <div class="right-card">
+        <div class="right-card-title">Data deletion</div>
+        <div class="right-card-desc">Request deletion of your account, including stored profile snapshots, analytics records, networking preferences, and cached backend records.</div>
+      </div>
+      <div class="right-card">
+        <div class="right-card-title">Notification control</div>
+        <div class="right-card-desc">Toggle email notifications in Settings at any time.</div>
+      </div>
+    </div>
+
+    <div class="info-box info-blue">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div>To request deletion, email <a href="mailto:subul@smartovate.com">subul@smartovate.com</a> with subject line "Data Deletion Request [Subul IN]". We may verify your identity before processing the request. Requests are acknowledged within 5 business days and processed within 30 days unless a longer period is required by law.</div>
+    </div>
+
+    <p>Once deletion is completed, associated cloud-stored profile snapshots, analytics records, and AI-generated data are removed from active production systems and handled according to our retention and backup policies, except where retention is legally required.</p>
+  </div>
+
+  <!-- Limited Use -->
+  <div class="section" id="s13">
+    <div class="section-header">
+      <div class="section-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <div>
+        <div class="section-num">Section 13</div>
+        <h2>Chrome Web Store Limited Use Compliance</h2>
+      </div>
+    </div>
+
+    <p>Subul IN complies with the Chrome Web Store Limited Use Policy. Data collected through Chrome extension permissions is used solely to provide or improve user-facing functionality explicitly requested by the user.</p>
+
+    <ul>
+      <li>We do not sell personal data.</li>
+      <li>We do not use collected data for advertising purposes.</li>
+      <li>We do not transfer user data to data brokers.</li>
+      <li>We do not use user data for credit or lending decisions.</li>
+      <li>We do not use user data for employment eligibility decisions.</li>
+      <li>We do not use user data to train generalized AI models.</li>
+    </ul>
+  </div>
+
+  <!-- Section 14 -->
+  <div class="section" id="s14">
+    <div class="section-header">
+      <div class="section-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+      </div>
+      <div>
+        <div class="section-num">Section 14</div>
+        <h2>Compliance and Contact</h2>
+      </div>
+    </div>
+
+    <ul>
+      <li><strong>Developer identity:</strong> Subul (Smartovate Technologies), contact subul@smartovate.com for privacy, data protection, or user-rights requests.</li>
+      <li><strong>Legal entity:</strong> Smartovate Technologies Ltd, operator of the Subul platform and Subul IN extension.</li>
+      <li><strong>Data controller:</strong> Smartovate Technologies Ltd (registered as SMARTOVATE LTD), 71-75 Shelton Street, London WC2H 9JQ, United Kingdom, acts as the data controller for personal data processed through Subul IN.</li>
+      <li><strong>Policy evolution:</strong> If we change data collection, we will update this policy and prompt users in-app.</li>
+      <li><strong>CWS reference:</strong> This policy aligns with Google CWS Policy Section 4 and Section 4.5.</li>
+      <li><strong>Chrome Web Store compliance:</strong> Subul IN follows Chrome Web Store User Data Policy requirements, including Limited Use principles for collected data.</li>
+      <li><strong>Limited Use:</strong> Subul IN complies with Chrome Web Store Limited Use requirements and uses collected data solely to provide or improve user-facing functionality.</li>
+    </ul>
+
+    <div class="info-box info-green">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      <div>Subul IN complies with Chrome Web Store Limited Use requirements. Data obtained through Google Chrome extension permissions is used exclusively to provide user-facing functionality requested by the user.</div>
+    </div>
+
+    <div class="contact-card">
+      <h3>Privacy and Compliance Contact</h3>
+      <p>For privacy, data protection, or user-rights requests, contact our compliance team.</p>
+      <a href="mailto:subul@smartovate.com">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        subul@smartovate.com
+      </a>
+      <p style="margin-top:12px; font-size:13px;">
+        Smartovate Technologies Ltd<br>
+        71-75 Shelton Street<br>
+        London WC2H 9JQ, United Kingdom<br>
+        https://app.subul.uk
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <p>© 2026 Subul IN · <a href="https://app.subul.uk" target="_blank" rel="noopener noreferrer">app.subul.uk</a> · <a href="/terms" rel="noopener noreferrer">Terms of Service</a> · Effective May 31, 2026 · Version 3.2.0</p>
+  <p style="margin-top:8px;">This Privacy Policy is intended to align with Chrome Web Store User Data Policy requirements and applicable privacy regulations.</p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,1589 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Subul IN</title>
+  <link rel="stylesheet" href="popup.css">
+  <style>
+    /* ── Notification event list ───────────────────────────── */
+    .sn-hint {
+      font-size: 11px;
+      color: var(--tx3, #aaa);
+      padding: 8px 0 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      font-weight: 600;
+    }
+    .sn-list {
+      background: var(--bg2);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+    .sn-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--bd, #e8e6e1);
+      gap: 8px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .sn-item:active { opacity: 0.7; }
+    .sn-label {
+      font-size: 11.5px;
+      color: var(--tx2, #444);
+      flex: 1;
+      user-select: none;
+    }
+    /* Hide the real checkbox */
+    .sn-check { display: none; }
+    /* Custom pill toggle — smaller than master toggle */
+    .sn-pill {
+      position: relative;
+      width: 28px;
+      height: 16px;
+      background: var(--bd, #ccc);
+      border-radius: 16px;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .sn-pill::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+      transition: transform 0.2s;
+    }
+    /* Checked state */
+    .sn-check:checked + .sn-pill {
+      background: var(--accent, #6941c6);
+    }
+    .sn-check:checked + .sn-pill::after {
+      transform: translateX(12px);
+    }
+    /* Dark mode */
+    body.dark .sn-label {
+      color: var(--tx);
+    }
+    body.dark .sn-pill {
+      background: #444;
+    }
+  </style>
+  <style>
+    /* ── Subul earned toggle ────────────────────────────────── */
+    .subul-earned-toggle {
+      display: flex; align-items: center; cursor: pointer; flex-shrink: 0; margin-left: 4px;
+    }
+    .subul-earned-check { display: none; }
+    .subul-earned-pill {
+      position: relative; width: 28px; height: 16px;
+      background: var(--bd, #ccc); border-radius: 16px; flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .subul-earned-pill::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 12px; height: 12px; border-radius: 50%; background: #fff;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2); transition: transform 0.2s;
+    }
+    .subul-earned-check:checked + .subul-earned-pill { background: var(--accent, #6941c6); }
+    .subul-earned-check:checked + .subul-earned-pill::after { transform: translateX(12px); }
+    .subul-item-pending { opacity: 0.45; }
+    .subul-dot-earned { background: var(--accent, #6941c6) !important; }
+    .subul-dot-pending { background: var(--bd, #ccc) !important; }
+
+    /* ── Subul page ─────────────────────────────────────────── */
+    .feature-icon-subul { background: linear-gradient(135deg, #6941c6, #c026d3); }
+
+    .subul-sync-bar {
+      background: var(--bg2);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 11px;
+      color: var(--tx2);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .subul-counts {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .subul-count-card {
+      background: var(--bg2);
+      border-radius: 10px;
+      padding: 12px 6px;
+      text-align: center;
+    }
+    .subul-count-num {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--accent, #6941c6);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .subul-count-lbl {
+      font-size: 10px;
+      color: var(--tx2);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .subul-section { margin-bottom: 16px; }
+    .subul-section-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--tx2);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .subul-list {
+      background: var(--bg2);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .subul-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--bd, #e8e6e1);
+    }
+    .subul-item:last-child { border-bottom: none; }
+    .subul-item-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent, #6941c6);
+      flex-shrink: 0;
+      margin-top: 5px;
+    }
+    .subul-item-body { flex: 1; min-width: 0; }
+    .subul-item-name {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--tx, #191919);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .subul-item-meta {
+      font-size: 11px;
+      color: var(--tx2, #888);
+      margin-top: 2px;
+    }
+    .subul-item-score {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent, #6941c6);
+      flex-shrink: 0;
+    }
+    .subul-post-btn {
+      font-size: 10px;
+      padding: 3px 8px;
+      border: 1px solid var(--accent, #6941c6);
+      border-radius: 6px;
+      background: none;
+      color: var(--accent, #6941c6);
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .subul-post-btn:hover { background: var(--accent, #6941c6); color: #fff; }
+  </style>
+</head>
+
+<body>
+
+  <!-- Toast notification container -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <!-- Privacy & Consent Disclosure Overlay -->
+  <div id="subul-consent-overlay" class="disclosure-overlay" aria-hidden="true" style="display:none;">
+    <div class="disclosure-card" id="consentCard" role="dialog" aria-modal="true" aria-labelledby="consentTitle">
+      <div class="disclosure-header">
+        <div class="disclosure-title" id="consentTitle">Privacy &amp; Consent Disclosure</div>
+        <div class="disclosure-subtitle">Please review before continuing.</div>
+      </div>
+      <div class="disclosure-body">
+        <p>Subul IN processes data only when you take action (Analyze, Generate, Scan).</p>
+        <ul>
+          <li>LinkedIn page data is parsed in your browser at your request.</li>
+          <li>Data is sent over HTTPS to the Subul backend and processed by Azure OpenAI (no model training).</li>
+          <li>Limited local caching in chrome.storage.local improves performance.</li>
+          <li>No background bulk scraping, no data sale, and deletion requests are supported.</li>
+        </ul>
+      </div>
+      <div class="disclosure-consent">
+        <label class="disclosure-check">
+          <input type="checkbox" id="consentPolicyCheck" />
+          <span>I agree to the <a href="https://gray-mud-0ce80620f.2.azurestaticapps.net/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a> and <a href="https://gray-mud-0ce80620f.2.azurestaticapps.net/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>.</span>
+        </label>
+        <label class="disclosure-check">
+          <input type="checkbox" id="consentProcessingCheck" />
+          <span>I consent to user-initiated LinkedIn parsing and Azure OpenAI processing (no training).</span>
+        </label>
+      </div>
+      <div class="disclosure-actions">
+        <a class="disclosure-btn ghost" id="consentViewPrivacy" href="https://gray-mud-0ce80620f.2.azurestaticapps.net/privacy" target="_blank" rel="noopener noreferrer">View Privacy Policy</a>
+        <a class="disclosure-btn ghost" id="consentViewTerms" href="https://gray-mud-0ce80620f.2.azurestaticapps.net/terms" target="_blank" rel="noopener noreferrer">View Terms</a>
+        <button type="button" class="disclosure-btn primary" id="consentAcceptBtn" disabled>Accept &amp; Continue</button>
+        <button type="button" class="disclosure-btn ghost" id="consentDeclineBtn">Decline</button>
+      </div>
+    </div>
+
+    <div class="disclosure-card disclosure-required" id="consentRequiredPanel" role="dialog" aria-modal="true" aria-labelledby="consentRequiredTitle" style="display:none;">
+      <div class="disclosure-header">
+        <div class="disclosure-title" id="consentRequiredTitle">Consent Required</div>
+        <div class="disclosure-subtitle">You must accept the privacy disclosure to use the extension.</div>
+      </div>
+      <div class="disclosure-body">
+        <p>Review the privacy disclosure and accept to continue using Subul IN.</p>
+      </div>
+      <div class="disclosure-actions">
+        <button type="button" class="disclosure-btn primary" id="consentRetryBtn">Review &amp; Accept</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       AUTH GATE — visible until user logs in
+       ═══════════════════════════════════════════ -->
+  <div id="authGate">
+    <div class="auth-gate-header">
+      <div class="auth-gate-logo"><img src="data:image/png;base64,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" width="48" height="48" style="border-radius:14px;display:block;" alt="Subul IN" /></div>
+      <div class="auth-gate-title">Subul IN</div>
+      <div class="auth-gate-sub">Your AI-powered networking assistant</div>
+    </div>
+    <div class="auth-tabs">
+      <button type="button" class="auth-tab active" id="tabSignIn">Sign In</button>
+    </div>
+    <div id="authError" role="alert"></div>
+    <input type="email"    id="authEmail"    class="auth-input" placeholder="Email address" autocomplete="email" />
+    <input type="password" id="authPassword" class="auth-input" placeholder="Password" autocomplete="current-password" />
+    <button type="button" id="authSubmitBtn">Sign In</button>
+    <div class="auth-divider"><span>or</span></div>
+    <button type="button" id="authSubulBtn">
+      <svg class="subul-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+      </svg>
+      Continue with Subul
+    </button>
+
+    <!-- Subul sub-form (hidden until authSubulBtn clicked) -->
+    <div id="subulForm" class="subul-form">
+      <div class="subul-redirect-hint" id="subulRedirectHint">
+        <p>Enter your <strong>Subul</strong> credentials below.</p>
+        <p style="font-size:11px;margin-top:4px;">Don't have an account? <a href="https://app.subul.uk" target="_blank" style="color:var(--ac);text-decoration:underline;">Register on Subul</a></p>
+      </div>
+      <div id="subulError" class="auth-error"></div>
+      <input type="email"    id="subulEmail"    class="auth-input" placeholder="Subul email" autocomplete="email" />
+      <input type="password" id="subulPassword" class="auth-input" placeholder="Subul password" autocomplete="current-password" />
+      <button type="button" id="subulSubmitBtn">Connect with Subul</button>
+      <button type="button" id="subulBackBtn" class="auth-back-btn">Back</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       PAGES CONTAINER — multi-page SPA
+       ═══════════════════════════════════════════ -->
+  <div id="pagesContainer" style="display:none;">
+
+    <!-- ═══════ PAGE: HOME ═══════ -->
+    <div class="page active" id="page-home">
+      <!-- Header -->
+      <header class="page-header">
+        <div class="page-header-left">
+          <div class="logo" style="background:none;box-shadow:none;padding:0;overflow:hidden;"><img src="data:image/png;base64,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" width="28" height="28" style="border-radius:8px;display:block;" alt="Subul IN" /></div>
+          <span class="header-title">Subul IN</span>
+        </div>
+        <div class="page-header-right">
+          <button type="button" class="btn-icon btn-lang" id="langBtn" title="Switch language" aria-label="Switch language" style="font-size:10px;font-weight:700;letter-spacing:.5px;min-width:28px;">EN</button>
+          <button type="button" class="btn-icon" id="darkModeBtn" title="Toggle dark mode" aria-label="Toggle dark mode">
+            <svg id="iconMoon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+            <svg id="iconSun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+              <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+          </button>
+          <button type="button" class="btn-icon" id="notifBtn" title="Settings" aria-label="Settings" data-nav="settings">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 1v2m0 18v2m-9-11h2m18 0h2m-3.3-6.7l-1.4 1.4M6.7 17.3l-1.4 1.4m0-13.4l1.4 1.4m10.6 10.6l1.4 1.4" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Scrollable home content -->
+      <div class="home-scroll" style="overflow-y:auto;overflow-x:hidden;max-height:calc(100vh - 80px);padding-bottom:12px;">
+
+      <!-- Status bar (hidden from user, kept for JS refs) -->
+      <div class="status-bar" id="statusBar" style="display:none;">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Checking...</span>
+      </div>
+
+      <!-- User bar -->
+      <div id="userBar">
+        <span id="userBarEmail"></span>
+        <button type="button" id="authLogoutBtn">Logout</button>
+      </div>
+
+      <!-- Profile hero -->
+      <div class="home-profile-hero" id="homeProfileHero">
+        <div class="home-avatar-wrap">
+          <div class="home-avatar" id="homeAvatar">?</div>
+          <button class="home-avatar-change" id="homeAvatarChangeBtn" title="Change photo" style="display:none;">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>
+            </svg>
+          </button>
+          <input type="file" id="homeAvatarFileInput" accept="image/*" style="display:none;" />
+        </div>
+        <div class="home-name" id="homeName">Your Profile</div>
+        <div class="home-headline" id="homeHeadline">Go to your LinkedIn profile &amp; click extract</div>
+        <!-- Profile completeness score -->
+        <div class="home-completeness" id="homeCompleteness" style="display:none;" title="Click to see breakdown">
+          <svg class="home-completeness-ring" viewBox="0 0 36 36" width="40" height="40">
+            <circle class="home-ring-bg" cx="18" cy="18" r="15.9" fill="none" stroke-width="3"/>
+            <circle class="home-ring-fill" id="homeRingFill" cx="18" cy="18" r="15.9" fill="none" stroke-width="3"
+              stroke-dasharray="0 100" stroke-linecap="round" transform="rotate(-90 18 18)"/>
+          </svg>
+          <span class="home-completeness-score" id="homeCompletenessScore">0%</span>
+        </div>
+        <div class="home-completeness-breakdown" id="homeCompletenessBreakdown" style="display:none;"></div>
+        <button class="home-edit-btn" id="homeEditBtn" title="Edit profile">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+          </svg>
+        </button>
+        <button class="home-edit-btn" id="homeReextractBtn" title="Re-extract profile" style="right:36px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>
+        </button>
+      </div>
+      <!-- Extraction status line -->
+      <div class="home-extract-status" id="homeExtractStatus" style="display:none;">
+        <span class="home-extract-dot" id="homeExtractDot"></span>
+        <span id="homeExtractText">Extracted just now</span>
+      </div>
+
+      <!-- Feature cards grid -->
+      <div class="home-features">
+        <button class="feature-card" data-nav="post">
+          <div class="feature-icon feature-icon-post">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+          </div>
+          <div class="feature-label">Create Post</div>
+          <div class="feature-desc">AI-powered content</div>
+        </button>
+        <button class="feature-card" data-nav="profile">
+          <div class="feature-icon feature-icon-profile">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <div class="feature-label">Profile</div>
+          <div class="feature-desc">Optimize & score</div>
+        </button>
+        <button class="feature-card" data-nav="networking">
+          <div class="feature-icon feature-icon-network">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+            </svg>
+          </div>
+          <div class="feature-label">Network</div>
+          <div class="feature-desc">Smart connections</div>
+        </button>
+        <button class="feature-card" data-nav="gap">
+          <div class="feature-icon feature-icon-gap">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </div>
+          <div class="feature-label">Gap Analysis</div>
+          <div class="feature-desc">Compare profiles</div>
+        </button>
+      </div>
+
+      <!-- Chat CTA -->
+      <button class="home-chat-cta" id="homeChatCta" data-nav="chat">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        Continue in Chat
+      </button>
+
+      </div><!-- /home-scroll -->
+    </div>
+
+    <!-- ═══════ PAGE: POST ═══════ -->
+    <div class="page" id="page-post">
+      <header class="page-header">
+        <button type="button" class="btn-back" data-nav="home" aria-label="Go back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <span class="page-title">Create Post</span>
+        <div class="page-header-right"></div>
+      </header>
+      <div class="page-body">
+        <div class="form-group">
+          <label for="postTopic">Topic <span class="req">*</span></label>
+          <textarea id="postTopic" rows="3"
+            placeholder="e.g. Why I stopped chasing promotions and started chasing impact"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group half">
+            <label>Type</label>
+            <select id="postType" title="Post type">
+              <option value="opinion">Opinion</option>
+              <option value="storytelling">Storytelling</option>
+              <option value="listicle">Listicle</option>
+              <option value="how_to">How-to</option>
+              <option value="contrarian">Contrarian</option>
+              <option value="lesson_learned">Lesson Learned</option>
+              <option value="tips">Tips</option>
+            </select>
+          </div>
+          <div class="form-group half">
+            <label>Tone</label>
+            <select id="postTone" title="Post tone">
+              <option value="professional">Professional</option>
+              <option value="conversational">Conversational</option>
+              <option value="inspirational">Inspirational</option>
+              <option value="provocative">Provocative</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group half">
+            <label>Length</label>
+            <select id="postLength" title="Post length">
+              <option value="short">Short</option>
+              <option value="medium" selected>Medium</option>
+              <option value="long">Long</option>
+            </select>
+          </div>
+          <div class="form-group half">
+            <label>Language</label>
+            <select id="postLang" title="Post language">
+              <option value="FR">Fran&ccedil;ais</option>
+              <option value="EN">English</option>
+            </select>
+          </div>
+        </div>
+
+        <button class="btn-primary" id="genPostBtn">Generate Post</button>
+        <p class="ai-disclosure">AI output is generated via Azure OpenAI through our backend. Data is processed only when you click Generate and is not used to train models.</p>
+        <div class="output-box" id="postOutBox" style="display:none;">
+          <div class="output-bar">
+            <span class="output-label">Generated Post</span>
+            <div class="output-actions">
+              <button class="btn-sm" id="copyPostBtn">Copy</button>
+            </div>
+          </div>
+          <textarea class="output-text" id="postOutText" readonly rows="10" spellcheck="true"></textarea>
+          <div class="output-meta" id="postOutMeta"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ PAGE: PROFILE ═══════ -->
+    <div class="page" id="page-profile">
+      <header class="page-header">
+        <button type="button" class="btn-back" data-nav="home" aria-label="Go back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <span class="page-title">Profile</span>
+        <div class="page-header-right"></div>
+      </header>
+
+      <!-- Sub-tabs -->
+      <nav class="sub-tabs" role="tablist" aria-label="Profile sections">
+        <button class="sub-tab active" data-subtab="score">Score</button>
+        <button class="sub-tab" data-subtab="ai-deep">AI Deep</button>
+        <button class="sub-tab" data-subtab="generate">Generate</button>
+      </nav>
+
+      <div class="page-body">
+        <!-- Sub-tab: Score -->
+        <div class="sub-content active" id="subtab-score">
+          <div id="scoreCard">
+            <div class="score-card-header">
+              <span class="score-card-title">Profile Strength</span>
+              <span class="score-card-hint">Instant</span>
+            </div>
+            <div class="score-panel" id="scoreBeforePanel">
+              <div class="score-header">
+                <div class="score-header-left">
+                  <span class="score-label">Current Profile</span>
+                  <span class="score-tier" id="scoreBeforeTier"></span>
+                </div>
+                <div class="score-circle" id="scoreBeforeCircle">
+                  <span id="scoreBeforeNum">--</span>
+                </div>
+              </div>
+              <div class="score-bars" id="scoreBeforeBars"></div>
+              <div class="score-issue" id="scoreBeforeIssue"></div>
+            </div>
+            <div class="score-arrow" id="scoreArrow">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+              <span id="scoreImprovement"></span>
+            </div>
+            <div class="score-panel score-panel-after" id="scoreAfterPanel">
+              <div class="score-header">
+                <div class="score-header-left">
+                  <span class="score-label">After AI Optimization</span>
+                  <span class="score-tier score-tier-after" id="scoreAfterTier"></span>
+                </div>
+                <div class="score-circle score-circle-after" id="scoreAfterCircle">
+                  <span id="scoreAfterNum">--</span>
+                </div>
+              </div>
+              <div class="score-bars" id="scoreAfterBars"></div>
+              <div class="score-potential" id="scoreAfterPotential"></div>
+            </div>
+          </div>
+          <button type="button" id="analyzeBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Analyze My Profile
+          </button>
+        </div>
+
+        <!-- Sub-tab: AI Deep -->
+        <div class="sub-content" id="subtab-ai-deep">
+          <div class="empty-state" id="aiDeepEmptyState">
+            <div class="empty-state-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+            <div class="empty-state-title">AI-Powered Deep Analysis</div>
+            <div class="empty-state-desc">Get a comprehensive AI evaluation of your profile with personalized recommendations, grade breakdown, and actionable improvements.<br><small style="color:var(--tx3);margin-top:4px;display:block;">Requires your profile to be extracted first. Grade scale: A = Exceptional (90-100) &middot; B = Strong (75-89) &middot; C = Average (60-74) &middot; D = Needs Work (&lt;60)</small></div>
+          </div>
+          <button type="button" id="aiScoreBtn" class="btn-ai-score">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            AI Deep Analysis
+          </button>
+          <p class="ai-disclosure">AI analysis runs through Azure OpenAI via our backend when you click the button. Data is not used for model training.</p>
+          <div id="aiScoreCard" class="ai-score-card" style="display:none">
+            <div class="ai-score-header">
+              <div class="ai-score-left">
+                <div class="ai-score-grade" id="aiScoreGrade">&mdash;</div>
+                <div class="ai-score-type" id="aiScoreType">&mdash;</div>
+              </div>
+              <div class="ai-score-right">
+                <div class="ai-score-ring">
+                  <svg viewBox="0 0 36 36" class="ai-score-svg">
+                    <path class="ai-ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <path class="ai-ring-fill" id="aiScoreRing" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                  </svg>
+                  <span class="ai-score-num" id="aiScoreNum">0</span>
+                </div>
+              </div>
+            </div>
+            <div class="ai-score-summary" id="aiScoreSummary"></div>
+            <div class="ai-score-sections" id="aiScoreSections"></div>
+            <div class="ai-score-actions" id="aiScoreActions"></div>
+            <div class="ai-score-strengths" id="aiScoreStrengths"></div>
+            <div class="cache-tag" id="aiScoreCacheTag" style="display:none">Cached result (24h)</div>
+            <button type="button" class="export-btn" id="aiScoreExportBtn" style="display:none">Export as Image</button>
+          </div>
+        </div>
+
+        <!-- Sub-tab: Generate -->
+        <div class="sub-content" id="subtab-generate">
+          <div class="form-group">
+            <label>What to generate</label>
+            <div class="check-group">
+              <label class="check-item"><input type="checkbox" id="genHeadline" checked><span class="check-text">Headline</span><span class="check-desc">Title + keywords</span></label>
+              <label class="check-item"><input type="checkbox" id="genAbout" checked><span class="check-text">About / Bio</span><span class="check-desc">Personalized bio</span></label>
+              <label class="check-item"><input type="checkbox" id="genExp"><span class="check-text">Experience</span><span class="check-desc">Result-oriented bullets</span></label>
+              <label class="check-item"><input type="checkbox" id="genSkills"><span class="check-text">Skills</span><span class="check-desc">Format + suggestions</span></label>
+              <label class="check-item all-item"><input type="checkbox" id="genAll"><span class="check-text">Generate all</span><span class="check-desc"></span></label>
+            </div>
+          </div>
+          <div class="form-group" id="bioLengthRow">
+            <label>Bio length</label>
+            <select id="profBioLength" title="Bio length">
+              <option value="short">Short &mdash; 2-3 sentences</option>
+              <option value="medium" selected>Medium &mdash; 2-3 paragraphs</option>
+              <option value="long">Long &mdash; 4-5 paragraphs</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <div class="form-group half">
+              <label>Language</label>
+              <select id="profLang" title="Profile language">
+                <option value="FR">Fran&ccedil;ais</option>
+                <option value="EN">English</option>
+              </select>
+            </div>
+            <div class="form-group half">
+              <label>Tone</label>
+              <select id="profTone" title="Profile tone">
+                <option value="professional">Professional</option>
+                <option value="confident">Confident</option>
+                <option value="creative">Creative</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Extra instructions (optional)</label>
+            <textarea id="profInstr" rows="2" placeholder="e.g. Emphasize AI skills, make it approachable"></textarea>
+          </div>
+          <button type="button" class="btn-primary" id="genProfBtn">Generate Profile Content</button>
+          <div class="output-box" id="profOutBox">
+            <div class="output-bar">
+              <span class="output-label">Generated Content</span>
+              <button type="button" class="btn-sm" id="copyProfBtn">Copy All</button>
+            </div>
+            <div class="output-text" id="profOutText"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ PAGE: NETWORKING ═══════ -->
+    <div class="page" id="page-networking">
+      <header class="page-header">
+        <button type="button" class="btn-back" data-nav="home" aria-label="Go back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <span class="page-title">Networking</span>
+        <div class="page-header-right"></div>
+      </header>
+      <div class="page-body">
+        <!-- Consent gate -->
+        <div id="netConsent" style="display:none;">
+          <div class="net-consent-card">
+            <div class="net-consent-card-header">
+              <div class="net-consent-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+              <div class="net-consent-card-heading">
+                <div class="net-consent-title" data-i18n="netConsentTitle">Before you scan</div>
+                <div class="net-consent-subtitle" data-i18n="netConsentSubtitle">A few things to know first</div>
+              </div>
+            </div>
+            <div class="net-consent-body">
+              <p data-i18n-html="netConsentBody">This tool reads <strong>publicly visible</strong> LinkedIn profiles from pages you are currently browsing. It does <strong>not</strong> access private data, send automated connection requests, or interact with LinkedIn on your behalf.</p>
+              <p data-i18n="netConsentConfirm">By continuing you confirm that:</p>
+              <ul>
+                <li data-i18n="netConsentLi1">You use this tool for personal, legitimate networking only</li>
+                <li data-i18n="netConsentLi2-raw">You comply with LinkedIn's <a href="https://www.linkedin.com/legal/user-agreement" target="_blank" rel="noopener noreferrer">User Agreement</a> and applicable data-protection laws (GDPR, CCPA, etc.)</li>
+                <li data-i18n="netConsentLi3">You take full responsibility for how you use the suggested contacts and messages</li>
+              </ul>
+              <p class="net-consent-note" data-i18n="netConsentNote">Profile data is processed by our AI to generate a relevance score and a draft message. It is stored temporarily and not sold or shared with third parties.</p>
+            </div>
+            <label class="net-consent-check">
+              <input type="checkbox" id="netConsentCheck" />
+              <span data-i18n="netConsentCheck">I understand and agree to the above</span>
+            </label>
+            <button type="button" class="btn-primary" id="netConsentAcceptBtn" disabled data-i18n="netConsentAcceptBtn">Continue to Setup</button>
+          </div>
+        </div>
+
+        <!-- Onboarding -->
+        <div id="netOnboarding">
+          <div class="net-ob-title">Set your networking goal</div>
+          <div class="net-ob-hint">This personalises every connection score and message.</div>
+          <div class="net-goal-options">
+            <label class="net-goal-opt">
+              <input type="radio" name="netGoal" value="job_search" checked />
+              <div class="net-goal-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="12"/><path d="M2 12h20"/></svg></div>
+              <div class="net-goal-label">Job Search</div>
+              <div class="net-goal-desc">Find recruiters &amp; hiring managers</div>
+            </label>
+            <label class="net-goal-opt">
+              <input type="radio" name="netGoal" value="clients" />
+              <div class="net-goal-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div>
+              <div class="net-goal-label">Find Clients</div>
+              <div class="net-goal-desc">Reach decision-makers &amp; buyers</div>
+            </label>
+            <label class="net-goal-opt">
+              <input type="radio" name="netGoal" value="investors" />
+              <div class="net-goal-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="4"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="19.78" y1="4.22" x2="18.36" y2="5.64"/><line x1="22" y1="12" x2="20" y2="12"/><path d="M9 21h6"/><path d="M12 17a5 5 0 100-10 5 5 0 000 10z"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+              <div class="net-goal-label">Find Investors</div>
+              <div class="net-goal-desc">VCs, angels &amp; fellow founders</div>
+            </label>
+            <label class="net-goal-opt">
+              <input type="radio" name="netGoal" value="learning" />
+              <div class="net-goal-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
+              <div class="net-goal-label">Learn &amp; Grow</div>
+              <div class="net-goal-desc">Mentors &amp; thought leaders</div>
+            </label>
+          </div>
+          <div class="net-ob-fields">
+            <div class="form-group">
+              <label>Your industry</label>
+              <input type="text" id="netIndustry" placeholder="e.g. Software / Data Science" />
+            </div>
+            <div class="form-row">
+              <div class="form-group half">
+                <label>Job title</label>
+                <input type="text" id="netJobTitle" placeholder="e.g. Data Engineer" />
+              </div>
+              <div class="form-group half">
+                <label>Seniority</label>
+                <select id="netSeniority" title="Seniority level">
+                  <option value="junior">Junior</option>
+                  <option value="mid" selected>Mid</option>
+                  <option value="senior">Senior</option>
+                  <option value="executive">Executive</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <button type="button" class="btn-primary" id="netSaveGoalBtn">Save &amp; Start</button>
+        </div>
+
+        <!-- Main networking UI -->
+        <div id="netMain" style="display:none;">
+          <div class="net-goal-bar">
+            <span class="net-goal-bar-label">Goal:</span>
+            <span id="netGoalLabel" class="net-goal-badge"></span>
+            <button type="button" class="btn-sm net-change-btn" id="netChangeGoalBtn">Change</button>
+          </div>
+          <button type="button" class="btn-primary" id="netScanBtn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            Scan This Page
+          </button>
+          <div class="net-scan-hint">Navigate to a LinkedIn search or People You May Know, then scan.</div>
+          <div id="netStatus" class="net-status" style="display:none;"></div>
+          <div id="netStatsBar" class="net-stats-bar" style="display:none;">
+            <span id="netStatScanned">&mdash; scanned</span>
+            <span class="net-stats-sep">&middot;</span>
+            <span id="netStatMatched">&mdash; selected</span>
+            <span class="net-stats-sep">&middot;</span>
+            <span id="netStatDeep">analyzing...</span>
+            <button type="button" class="net-map-toggle btn-sm hidden" id="netMapToggle">Map &#9662;</button>
+          </div>
+          <div id="netCoverageMap" class="net-coverage-map hidden"></div>
+          <div id="netBulkBar" class="net-bulk-bar hidden">
+            <span id="netBulkCount">0 selected</span>
+            <button type="button" class="btn-sm" id="netBulkCopy">Copy All Messages</button>
+            <button type="button" class="btn-sm" id="netBulkSkip">Skip Selected</button>
+            <button type="button" class="btn-sm" id="netBulkClear">Deselect All</button>
+          </div>
+          <div id="netSuggestions"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ PAGE: GAP ANALYSIS ═══════ -->
+    <div class="page" id="page-gap">
+      <header class="page-header">
+        <button type="button" class="btn-back" data-nav="home" aria-label="Go back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <span class="page-title">Gap Analysis</span>
+        <div class="page-header-right"></div>
+      </header>
+      <div class="page-body">
+        <!-- Gap consent gate -->
+        <div id="gapConsent" style="display:none;">
+          <div class="net-consent-card">
+            <div class="net-consent-card-header">
+              <div class="net-consent-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+              <div class="net-consent-card-heading">
+                <div class="net-consent-title" data-i18n="gapConsentTitle">Before you compare</div>
+                <div class="net-consent-subtitle" data-i18n="gapConsentSubtitle">A few things to know first</div>
+              </div>
+            </div>
+            <div class="net-consent-body">
+              <p data-i18n-html="gapConsentBody">Gap Analysis reads <strong>publicly visible</strong> profile data from the LinkedIn page you are currently viewing. It does <strong>not</strong> access private data or interact with LinkedIn on your behalf.</p>
+              <p data-i18n="gapConsentConfirm">By continuing you acknowledge and agree that:</p>
+              <ul>
+                <li>You use this feature solely for <strong>personal career development</strong> and legitimate professional networking</li>
+                <li>You are responsible for complying with LinkedIn's <a href="https://www.linkedin.com/legal/user-agreement" target="_blank" rel="noopener noreferrer">User Agreement</a> and all applicable data-protection regulations (GDPR, CCPA, etc.)</li>
+                <li>You accept <strong>full responsibility</strong> for any use of the extracted data and AI-generated insights</li>
+                <li>Profile data is processed temporarily by our AI and is <strong>not sold or shared</strong> with third parties</li>
+              </ul>
+              <p class="net-consent-note" data-i18n="gapConsentNote">We do not store, sell, or share your data. Extraction reads only what is publicly visible on LinkedIn.</p>
+            </div>
+            <label class="net-consent-check">
+              <input type="checkbox" id="gapConsentCheck" />
+              <span data-i18n="gapConsentCheck">I understand and accept the above terms</span>
+            </label>
+            <button type="button" class="btn-primary" id="gapConsentAcceptBtn" disabled data-i18n="gapConsentAcceptBtn">Continue</button>
+          </div>
+        </div>
+
+        <!-- Persistent mode tabs — always visible after consent, above all content -->
+        <div id="gapModeTabs" class="gap-mode-tabs-bar" style="display:none;">
+          <button type="button" class="gap-mode-tab active" id="gapModeProfile" data-mode="profile">vs. Profile</button>
+          <button type="button" class="gap-mode-tab" id="gapModeJD" data-mode="jd">vs. Job Text</button>
+          <button type="button" class="gap-mode-tab" id="gapModeJob" data-mode="job">Job Fit</button>
+        </div>
+
+        <!-- Idle setup area (hidden when result is showing) -->
+        <div id="gapIdle" class="gap-idle">
+          <!-- Profile mode -->
+          <div id="gapModeProfilePanel">
+            <div class="gap-idle-hint" id="gapIdleHint">Navigate to any LinkedIn profile page, then click Extract to load their profile data first.</div>
+            <div class="gap-my-profile" id="gapMyProfileName"></div>
+            <button type="button" class="btn-primary" id="gapScrapeBtn">Extract Target Profile</button>
+          </div>
+
+          <!-- JD text paste mode -->
+          <div id="gapModeJDPanel" style="display:none;">
+            <div class="gap-idle-hint">Paste a job description below to see how your profile measures up.</div>
+            <textarea id="gapJDInput" class="gap-jd-textarea" placeholder="Paste job description here..." rows="6"></textarea>
+            <input type="text" id="gapJDRole" class="gap-jd-role" placeholder="Job title (optional)" />
+            <button type="button" class="btn-primary" id="gapJDAnalyzeBtn">Analyze Against JD</button>
+          </div>
+
+          <!-- Job Fit mode -->
+          <div id="gapModeJobPanel" style="display:none;">
+            <div class="gap-idle-hint" id="gapJobHint">Go to LinkedIn Jobs and open a specific job posting, then click Extract below.</div>
+            <button type="button" class="btn-primary" id="gapJobScrapeBtn">Extract Job Posting</button>
+            <button type="button" class="btn-primary" id="gapJobAnalyzeBtn" style="display:none;">Run Fit Analysis</button>
+          </div>
+
+        </div>
+
+        <div id="gapScraped" class="gap-hidden">
+          <div class="gap-scraped-header">
+            <div class="gap-scraped-avatar" id="gapScrapedAvatar">?</div>
+            <div class="gap-scraped-info">
+              <div class="gap-scraped-name" id="gapScrapedName">&mdash;</div>
+              <div class="gap-scraped-headline" id="gapScrapedHeadline">&mdash;</div>
+              <div class="gap-scraped-location" id="gapScrapedLocation"></div>
+            </div>
+          </div>
+          <div class="gap-scraped-about" id="gapScrapedAbout" style="display:none"></div>
+          <div class="gap-scraped-section" id="gapScrapedExpSection" style="display:none">
+            <div class="gap-scraped-label">Experience</div>
+            <div class="gap-scraped-list" id="gapScrapedExp"></div>
+          </div>
+          <div class="gap-scraped-section" id="gapScrapedEduSection" style="display:none">
+            <div class="gap-scraped-label">Education</div>
+            <div class="gap-scraped-list" id="gapScrapedEdu"></div>
+          </div>
+          <div class="gap-scraped-section" id="gapScrapedSkillsSection" style="display:none">
+            <div class="gap-scraped-label">Skills</div>
+            <div class="gap-scraped-pills" id="gapScrapedSkills"></div>
+          </div>
+          <div class="gap-scraped-actions">
+            <button type="button" class="btn-primary" id="gapAnalyzeBtn">Run Gap Analysis</button>
+            <button type="button" class="btn-sm" id="gapRescrapeBtn">Re-extract</button>
+          </div>
+        </div>
+
+        <div id="gapLoading" class="gap-loading gap-hidden">
+          <span class="net-spinner"></span> Analyzing profile gap...
+        </div>
+        <div id="gapResult" class="gap-hidden">
+          <!-- Opening read block: matchup title + match signature -->
+          <div class="gap-opening-block" id="gapOpeningBlock" style="display:none;">
+            <div class="gap-matchup-title" id="gapMatchupTitle"></div>
+            <div class="gap-match-signature" id="gapMatchSignature"></div>
+          </div>
+
+          <!-- VS Header with photos -->
+          <div class="gap-dash-header">
+            <div class="gap-dash-profile gap-dash-you">
+              <div class="gap-dash-photo" id="gapYouPhoto"><span class="gap-dash-initial">Y</span></div>
+              <div class="gap-dash-name" id="gapYouName">&mdash;</div>
+              <div class="gap-dash-role" id="gapYouRole">&mdash;</div>
+              <div class="gap-dash-archetype" id="gapYouArchetype"></div>
+              <div class="gap-fingerprint" id="gapYouFingerprint" style="display:none;" title="Your profile fingerprint"></div>
+            </div>
+            <div class="gap-dash-vs">
+              <div class="gap-dash-score-ring">
+                <svg viewBox="0 0 80 80" class="gap-ring-svg">
+                  <circle cx="40" cy="40" r="34" class="gap-ring-bg"/>
+                  <circle cx="40" cy="40" r="34" class="gap-ring-fill" id="gapRingFill"/>
+                </svg>
+                <div class="gap-dash-overall" id="gapOverallScore">0</div>
+              </div>
+              <div class="gap-dash-overall-label" id="gapOverallLabel">Analyzing</div>
+            </div>
+            <div class="gap-dash-profile gap-dash-them">
+              <div class="gap-dash-photo gap-dash-photo-them" id="gapThemPhoto"><span class="gap-dash-initial">T</span></div>
+              <div class="gap-dash-name" id="gapThemName">&mdash;</div>
+              <div class="gap-dash-role" id="gapThemRole">&mdash;</div>
+              <div class="gap-dash-archetype" id="gapThemArchetype"></div>
+              <div class="gap-fingerprint gap-fingerprint-them" id="gapThemFingerprint" style="display:none;" title="Their profile fingerprint"></div>
+            </div>
+          </div>
+
+          <!-- Verdict Banner -->
+          <div class="gap-verdict" id="gapVerdict" style="display:none"></div>
+
+          <!-- Key Insight -->
+          <div class="gap-insight" id="gapInsight" style="display:none"></div>
+
+          <!-- Power Metrics (Radar-style bars) -->
+          <div class="gap-power-metrics" id="gapPowerMetrics" style="display:none">
+            <div class="gap-section-title">Power Index <span class="gap-power-legend-inline"><span class="gap-legend-you-dot"></span><span class="gap-legend-you-lbl">You</span><span class="gap-legend-them-dot"></span><span class="gap-legend-them-lbl">Them</span></span></div>
+            <div class="gap-power-subtitle">How your profile stacks up across 5 dimensions (0–100)</div>
+            <div class="gap-power-grid">
+              <div class="gap-power-row">
+                <span class="gap-power-label" title="How fully filled-out your profile is">Completeness</span>
+                <div class="gap-power-bar-wrap">
+                  <div class="gap-power-bar gap-power-you" id="gapPwrCompYou"></div>
+                  <div class="gap-power-bar gap-power-them" id="gapPwrCompThem"></div>
+                </div>
+                <span class="gap-power-scores"><span id="gapPwrCompYouVal" class="gap-pwr-val-you">–</span><span class="gap-pwr-sep">/</span><span id="gapPwrCompThemVal" class="gap-pwr-val-them">–</span></span>
+                <span class="gap-pwr-delta" id="gapPwrCompDelta"></span>
+              </div>
+              <div class="gap-power-row">
+                <span class="gap-power-label" title="Industry keywords and searchability in your profile">Keywords</span>
+                <div class="gap-power-bar-wrap">
+                  <div class="gap-power-bar gap-power-you" id="gapPwrKeyYou"></div>
+                  <div class="gap-power-bar gap-power-them" id="gapPwrKeyThem"></div>
+                </div>
+                <span class="gap-power-scores"><span id="gapPwrKeyYouVal" class="gap-pwr-val-you">–</span><span class="gap-pwr-sep">/</span><span id="gapPwrKeyThemVal" class="gap-pwr-val-them">–</span></span>
+                <span class="gap-pwr-delta" id="gapPwrKeyDelta"></span>
+              </div>
+              <div class="gap-power-row">
+                <span class="gap-power-label" title="Quality of storytelling in headline and about section">Narrative</span>
+                <div class="gap-power-bar-wrap">
+                  <div class="gap-power-bar gap-power-you" id="gapPwrNarYou"></div>
+                  <div class="gap-power-bar gap-power-them" id="gapPwrNarThem"></div>
+                </div>
+                <span class="gap-power-scores"><span id="gapPwrNarYouVal" class="gap-pwr-val-you">–</span><span class="gap-pwr-sep">/</span><span id="gapPwrNarThemVal" class="gap-pwr-val-them">–</span></span>
+                <span class="gap-pwr-delta" id="gapPwrNarDelta"></span>
+              </div>
+              <div class="gap-power-row">
+                <span class="gap-power-label" title="Career growth speed and role progression">Trajectory</span>
+                <div class="gap-power-bar-wrap">
+                  <div class="gap-power-bar gap-power-you" id="gapPwrTrajYou"></div>
+                  <div class="gap-power-bar gap-power-them" id="gapPwrTrajThem"></div>
+                </div>
+                <span class="gap-power-scores"><span id="gapPwrTrajYouVal" class="gap-pwr-val-you">–</span><span class="gap-pwr-sep">/</span><span id="gapPwrTrajThemVal" class="gap-pwr-val-them">–</span></span>
+                <span class="gap-pwr-delta" id="gapPwrTrajDelta"></span>
+              </div>
+              <div class="gap-power-row">
+                <span class="gap-power-label" title="Connections, followers, and content activity signal">Network</span>
+                <div class="gap-power-bar-wrap">
+                  <div class="gap-power-bar gap-power-you" id="gapPwrNetYou"></div>
+                  <div class="gap-power-bar gap-power-them" id="gapPwrNetThem"></div>
+                </div>
+                <span class="gap-power-scores"><span id="gapPwrNetYouVal" class="gap-pwr-val-you">–</span><span class="gap-pwr-sep">/</span><span id="gapPwrNetThemVal" class="gap-pwr-val-them">–</span></span>
+                <span class="gap-pwr-delta" id="gapPwrNetDelta"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Head to Head -->
+          <div class="gap-h2h" id="gapH2H" style="display:none">
+            <div class="gap-section-title">Head to Head</div>
+            <div class="gap-h2h-columns">
+              <div class="gap-h2h-col gap-h2h-wins">
+                <div class="gap-h2h-col-title">Your Wins</div>
+                <div id="gapH2HUserWins"></div>
+              </div>
+              <div class="gap-h2h-col gap-h2h-losses">
+                <div class="gap-h2h-col-title">Their Wins</div>
+                <div id="gapH2HTargetWins"></div>
+              </div>
+            </div>
+            <div class="gap-h2h-ties" id="gapH2HTies" style="display:none"></div>
+          </div>
+
+          <!-- Section Comparisons -->
+          <div class="gap-compare-grid" id="gapCompareGrid">
+            <div class="gap-compare-row" data-section="headline">
+              <div class="gap-compare-label">Headline</div>
+              <div class="gap-compare-bars"><div class="gap-bar-pair">
+                <span class="gap-bar-val gap-bar-you-val" id="gapBarYouHL">0</span>
+                <div class="gap-bar-track"><div class="gap-bar-fill gap-bar-you" id="gapBarYouHLFill"></div></div>
+                <div class="gap-bar-track gap-bar-track-right"><div class="gap-bar-fill gap-bar-them" id="gapBarThemHLFill"></div></div>
+                <span class="gap-bar-val gap-bar-them-val" id="gapBarThemHL">0</span>
+              </div></div>
+              <div class="gap-compare-detail"><div class="gap-compare-gap" id="gapHLGap"></div><div class="gap-compare-insight" id="gapHLInsight"></div><div class="gap-rewrite-box" id="gapHLRewrite"></div></div>
+            </div>
+            <div class="gap-compare-row" data-section="about">
+              <div class="gap-compare-label">About</div>
+              <div class="gap-compare-bars"><div class="gap-bar-pair">
+                <span class="gap-bar-val gap-bar-you-val" id="gapBarYouAB">0</span>
+                <div class="gap-bar-track"><div class="gap-bar-fill gap-bar-you" id="gapBarYouABFill"></div></div>
+                <div class="gap-bar-track gap-bar-track-right"><div class="gap-bar-fill gap-bar-them" id="gapBarThemABFill"></div></div>
+                <span class="gap-bar-val gap-bar-them-val" id="gapBarThemAB">0</span>
+              </div></div>
+              <div class="gap-compare-detail"><div class="gap-compare-gap" id="gapABGap"></div><div class="gap-compare-insight" id="gapABInsight"></div><div class="gap-rewrite-box" id="gapABRewrite"></div></div>
+            </div>
+            <div class="gap-compare-row" data-section="experience">
+              <div class="gap-compare-label">Experience</div>
+              <div class="gap-compare-bars"><div class="gap-bar-pair">
+                <span class="gap-bar-val gap-bar-you-val" id="gapBarYouEX">0</span>
+                <div class="gap-bar-track"><div class="gap-bar-fill gap-bar-you" id="gapBarYouEXFill"></div></div>
+                <div class="gap-bar-track gap-bar-track-right"><div class="gap-bar-fill gap-bar-them" id="gapBarThemEXFill"></div></div>
+                <span class="gap-bar-val gap-bar-them-val" id="gapBarThemEX">0</span>
+              </div></div>
+              <div class="gap-compare-detail"><div class="gap-compare-gap" id="gapEXGap"></div><div class="gap-compare-insight" id="gapEXInsight"></div></div>
+            </div>
+            <div class="gap-compare-row" data-section="education">
+              <div class="gap-compare-label">Education</div>
+              <div class="gap-compare-bars"><div class="gap-bar-pair">
+                <span class="gap-bar-val gap-bar-you-val" id="gapBarYouED">0</span>
+                <div class="gap-bar-track"><div class="gap-bar-fill gap-bar-you" id="gapBarYouEDFill"></div></div>
+                <div class="gap-bar-track gap-bar-track-right"><div class="gap-bar-fill gap-bar-them" id="gapBarThemEDFill"></div></div>
+                <span class="gap-bar-val gap-bar-them-val" id="gapBarThemED">0</span>
+              </div></div>
+              <div class="gap-compare-detail"><div class="gap-compare-gap" id="gapEDGap"></div><div class="gap-compare-insight" id="gapEDInsight"></div></div>
+            </div>
+            <div class="gap-compare-row" data-section="skills">
+              <div class="gap-compare-label">Skills</div>
+              <div class="gap-compare-bars"><div class="gap-bar-pair">
+                <span class="gap-bar-val gap-bar-you-val" id="gapBarYouSK">0</span>
+                <div class="gap-bar-track"><div class="gap-bar-fill gap-bar-you" id="gapBarYouSKFill"></div></div>
+                <div class="gap-bar-track gap-bar-track-right"><div class="gap-bar-fill gap-bar-them" id="gapBarThemSKFill"></div></div>
+                <span class="gap-bar-val gap-bar-them-val" id="gapBarThemSK">0</span>
+              </div></div>
+              <div class="gap-compare-detail"><div class="gap-compare-gap" id="gapSKGap"></div><div class="gap-pills" id="gapSkillsMissing"></div><div class="gap-pills gap-pills-green" id="gapSkillsAdv"></div><div class="gap-compare-insight" id="gapSKPositioning"></div></div>
+            </div>
+            <div class="gap-compare-row" data-section="content">
+              <div class="gap-compare-label">Content</div>
+              <div class="gap-compare-bars"><div class="gap-bar-pair">
+                <span class="gap-bar-val gap-bar-you-val" id="gapBarYouCT">0</span>
+                <div class="gap-bar-track"><div class="gap-bar-fill gap-bar-you" id="gapBarYouCTFill"></div></div>
+                <div class="gap-bar-track gap-bar-track-right"><div class="gap-bar-fill gap-bar-them" id="gapBarThemCTFill"></div></div>
+                <span class="gap-bar-val gap-bar-them-val" id="gapBarThemCT">0</span>
+              </div></div>
+              <div class="gap-compare-detail"><div class="gap-compare-gap" id="gapCTAdvice"></div><div class="gap-compare-insight" id="gapCTStrategy"></div></div>
+            </div>
+          </div>
+
+          <!-- Skill Gap Heatmap -->
+          <div class="gap-section gap-skill-heatmap-section" id="gapSkillHeatmap" style="display:none;">
+            <div class="gap-section-title">Skill Heatmap</div>
+            <div id="gapSkillHeatmapGrid"></div>
+          </div>
+
+          <!-- Quick Wins -->
+          <div class="gap-section gap-section-wins">
+            <div class="gap-section-title">Quick Wins</div>
+            <div id="gapQuickWins"></div>
+          </div>
+
+          <!-- Recruiter Perspective -->
+          <div class="gap-recruiter" id="gapRecruiter" style="display:none">
+            <div class="gap-section-title">Recruiter's Take</div>
+            <div class="gap-recruiter-text" id="gapRecruiterText"></div>
+          </div>
+
+          <!-- Connection Strategy (structured 3-block) -->
+          <div class="gap-section gap-section-strategy" id="gapStrategySection" style="display:none;">
+            <div class="gap-section-title">Connection Playbook</div>
+            <div class="gap-connection-block">
+              <div class="gap-conn-field">
+                <span class="gap-conn-label">Context</span>
+                <span class="gap-conn-text" id="gapStrategyContext"></span>
+              </div>
+              <div class="gap-conn-field">
+                <span class="gap-conn-label">First message</span>
+                <span class="gap-conn-text gap-conn-copyable" id="gapStrategyMsg"></span>
+                <button type="button" class="gap-copy-btn" data-target="gapStrategyMsg" title="Copy message">Copy</button>
+              </div>
+              <div class="gap-conn-field">
+                <span class="gap-conn-label">Follow-up</span>
+                <span class="gap-conn-text gap-conn-copyable" id="gapStrategyFollowup"></span>
+                <button type="button" class="gap-copy-btn" data-target="gapStrategyFollowup" title="Copy follow-up">Copy</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 90-Day Roadmap -->
+          <div class="gap-section" id="gapRoadmap" style="display:none"></div>
+
+          <!-- Actions -->
+          <div class="gap-export-row">
+            <div class="cache-tag" id="gapCacheTag" style="display:none">Cached result</div>
+            <button type="button" class="btn-sm gap-summary-toggle" id="gapSummaryToggle">Summary only</button>
+            <button type="button" class="btn-sm gap-pdf-btn" id="gapPdfBtn">Print / PDF</button>
+            <button type="button" class="export-btn" id="gapExportBtn">Download Report</button>
+            <button type="button" class="btn-sm gap-reset-btn" id="gapResetBtn">Analyze Another</button>
+          </div>
+        </div>
+
+        <!-- Job preview card (shown after extraction, before analysis) -->
+        <div id="gapJobPreview" style="display:none;">
+          <div class="gap-job-preview-title" id="gapJobTitle"></div>
+          <div class="gap-job-preview-company" id="gapJobCompany"></div>
+          <div class="gap-job-preview-meta" id="gapJobMeta"></div>
+          <div class="gap-job-desc-snippet" id="gapJobDescSnippet" style="display:none;"></div>
+        </div>
+
+        <!-- Job Fit Result -->
+        <div id="gapJobResult" class="gap-hidden">
+          <div class="jf-hero">
+            <svg class="jf-ring-svg" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="45" class="jf-ring-bg"/>
+              <circle cx="50" cy="50" r="45" class="jf-ring-fill" id="jfRingFill" stroke-dasharray="0 100"/>
+            </svg>
+            <div class="jf-score-overlay">
+              <div class="jf-score" id="jfScore">0%</div>
+              <div class="jf-fit-label" id="jfFitLabel"></div>
+            </div>
+          </div>
+          <div class="jf-job-name" id="jfJobName"></div>
+          <div id="jfVerdictBadge" class="jf-verdict-badge"></div>
+          <div class="jf-specialty" id="jfSpecialty"></div>
+          <div class="jf-coaching-note" id="jfCoaching"></div>
+
+          <div class="jf-section" id="jfFitSection" style="display:none;">
+            <div class="jf-section-title">Why You're a Fit</div>
+            <div id="jfFitPoints"></div>
+          </div>
+
+          <div class="jf-section" id="jfCriticalGaps" style="display:none;">
+            <div class="jf-section-title">Critical Gaps</div>
+            <div id="jfGapsList"></div>
+          </div>
+
+          <div class="jf-section" id="jfNiceGaps" style="display:none;">
+            <div class="jf-section-title">Nice-to-Have Gaps</div>
+            <div id="jfNiceList"></div>
+          </div>
+
+          <div class="jf-section">
+            <div class="jf-section-title jf-collapsible-title" id="jfCVToggle">
+              CV Tailoring <span class="jf-toggle-icon">+</span>
+            </div>
+            <div id="jfCVBody" style="display:none;">
+              <div id="jfCVHeadline"></div>
+              <div id="jfCVAbout"></div>
+              <div id="jfCVBullets"></div>
+              <div id="jfKeywords"></div>
+              <div id="jfCerts"></div>
+            </div>
+          </div>
+
+          <div class="jf-section" id="jfRoleAnalysis" style="display:none;">
+            <div class="jf-section-title">Role Analysis</div>
+            <div id="jfRoleAnalysisBody"></div>
+          </div>
+
+          <div class="jf-section" id="jfPrioritySection" style="display:none;">
+            <div class="jf-section-title">Priority Improvements</div>
+            <div id="jfPriorityList"></div>
+          </div>
+
+          <!-- Interview Preparation -->
+          <div class="jf-section" id="jfInterviewSection" style="display:none;">
+            <div class="jf-section-title">Likely Interview Questions</div>
+            <div id="jfInterviewList"></div>
+            <div class="gap-interview-btn-wrap" id="gapInterviewPrepSection">
+              <button type="button" class="gap-interview-btn" id="gapInterviewBtn">Generate Full Interview Prep</button>
+              <div id="gapInterviewPrepResult" class="gap-hidden"></div>
+            </div>
+          </div>
+
+          <div class="jf-section" id="jfCoverSection" style="display:none;">
+            <div class="jf-section-title">Cover Letter Talking Points</div>
+            <div id="jfCoverPoints"></div>
+          </div>
+
+          <div class="jf-section" id="jfRedFlags" style="display:none;">
+            <div class="jf-section-title">Red Flags</div>
+            <div id="jfRedList"></div>
+          </div>
+
+          <div class="gap-export-row">
+            <button type="button" class="btn-sm" id="jfResetBtn">Analyze Another Job</button>
+            <button type="button" class="btn-sm gap-pdf-btn" id="jfPdfBtn">Print / PDF</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══════ PAGE: CHAT ═══════ -->
+    <div class="page" id="page-chat">
+      <header class="page-header">
+        <button type="button" class="btn-back" data-nav="home" aria-label="Go back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <span class="page-title">AI Assistant</span>
+        <div class="page-header-right">
+          <button type="button" class="chat-guide-btn" id="chatGuideBtn" title="How to use the assistant">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Guide
+          </button>
+        </div>
+      </header>
+      <!-- Guide panel (hidden by default) -->
+      <div class="chat-guide-panel" id="chatGuidePanel" style="display:none;">
+        <div class="chat-guide-close" id="chatGuideClose">&#10005;</div>
+        <div class="chat-guide-title">What can I ask the AI?</div>
+        <div class="chat-guide-grid">
+          <div class="chat-guide-item">
+            <span class="chat-guide-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </span>
+            <div>
+              <div class="chat-guide-item-title">Write posts</div>
+              <div class="chat-guide-item-desc">"Write a LinkedIn post about completing my ML certification"</div>
+            </div>
+          </div>
+          <div class="chat-guide-item">
+            <span class="chat-guide-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+            </span>
+            <div>
+              <div class="chat-guide-item-title">Improve your profile</div>
+              <div class="chat-guide-item-desc">"Rewrite my headline to stand out for data science roles"</div>
+            </div>
+          </div>
+          <div class="chat-guide-item">
+            <span class="chat-guide-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            </span>
+            <div>
+              <div class="chat-guide-item-title">Gap analysis help</div>
+              <div class="chat-guide-item-desc">"Explain my gap analysis results" or "What should I do first?"</div>
+            </div>
+          </div>
+          <div class="chat-guide-item">
+            <span class="chat-guide-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+            </span>
+            <div>
+              <div class="chat-guide-item-title">Networking messages</div>
+              <div class="chat-guide-item-desc">"Write a connection request to a senior data engineer at Google"</div>
+            </div>
+          </div>
+          <div class="chat-guide-item">
+            <span class="chat-guide-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </span>
+            <div>
+              <div class="chat-guide-item-title">Career advice</div>
+              <div class="chat-guide-item-desc">"What skills should I learn to move from data analyst to ML engineer?"</div>
+            </div>
+          </div>
+          <div class="chat-guide-item">
+            <span class="chat-guide-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </span>
+            <div>
+              <div class="chat-guide-item-title">Feature how-tos</div>
+              <div class="chat-guide-item-desc">"How does Network Scan work?" or "How do I use the post generator?"</div>
+            </div>
+          </div>
+        </div>
+        <div class="chat-guide-tip">The AI knows your saved profile. Ask it to work with your actual data.</div>
+      </div>
+      <div class="chat-page-body">
+        <div class="chat-messages" id="chatMessages"></div>
+        <p class="chat-hint">Enter &#8629; to send &nbsp;&middot;&nbsp; Shift+Enter for new line</p>
+        <div class="chat-input-row">
+          <textarea id="chatInput" rows="1" placeholder="Ask about your profile, networking strategy, or generate content..." aria-label="Chat message"></textarea>
+          <button type="button" id="chatSendBtn">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ PAGE: SUBUL ═══════ -->
+
+    <!-- ═══════ PAGE: SETTINGS ═══════ -->
+    <div class="page" id="page-settings">
+      <header class="page-header">
+        <button type="button" class="btn-back" data-nav="home" aria-label="Go back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <span class="page-title">Settings</span>
+        <div class="page-header-right"></div>
+      </header>
+      <div class="page-body">
+        <!-- Display section -->
+        <div class="settings-section">
+          <div class="settings-section-label">Display</div>
+          <label class="settings-toggle-row">
+            <span>Dark mode</span>
+            <input type="checkbox" id="settingsDarkMode" class="settings-toggle-check" />
+          </label>
+          <div class="settings-toggle-row" id="settingsLangRow">
+            <span id="settingsLanguageLabel">Language</span>
+            <div class="settings-lang-btns">
+              <button type="button" class="settings-lang-opt active" data-lang="en">EN</button>
+              <button type="button" class="settings-lang-opt" data-lang="fr">FR</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Profile section -->
+        <div class="settings-section">
+          <div class="settings-section-label">Profile</div>
+          <div class="settings-profile-card" id="settingsProfileCard">
+            <div class="settings-profile-name" id="settingsProfileName">No profile saved</div>
+            <div class="settings-profile-headline" id="settingsProfileHeadline">Extract your LinkedIn profile to sync data here.</div>
+            <div class="settings-profile-meta" id="settingsProfileMeta"></div>
+          </div>
+          <button type="button" class="settings-link-btn" id="settingsEditProfile">Edit my profile data</button>
+        </div>
+
+        <!-- Notifications section -->
+        <div class="settings-section" id="settingsNotifSection">
+          <div class="settings-section-label" data-i18n="settingsEmailNotifLabel">Email Notifications</div>
+
+          <!-- Master toggle — uses same pill style as dark mode -->
+          <label class="settings-toggle-row" id="settingsNotifToggleRow">
+            <span data-i18n="settingsEnableEmailNotif">Enable email notifications</span>
+            <input type="checkbox" id="settingsNotifEnabled" class="settings-toggle-check" />
+          </label>
+
+          <!-- Event list — shown only when enabled -->
+          <div id="settingsNotifEvents" style="display:none;">
+            <div class="sn-hint" data-i18n="settingsNotifyMeWhen">Notify me when:</div>
+            <div class="sn-list">
+              <label class="sn-item">
+                <span class="sn-label" data-i18n="settingsNotifProfileExtracted">Profile extracted</span>
+                <input type="checkbox" class="settings-notif-event sn-check" data-event="profile_extracted" />
+                <span class="sn-pill"></span>
+              </label>
+              <label class="sn-item">
+                <span class="sn-label" data-i18n="settingsNotifAiScore">AI Profile Score ready</span>
+                <input type="checkbox" class="settings-notif-event sn-check" data-event="ai_score" />
+                <span class="sn-pill"></span>
+              </label>
+              <label class="sn-item">
+                <span class="sn-label" data-i18n="settingsNotifNetworkDone">Network analysis done</span>
+                <input type="checkbox" class="settings-notif-event sn-check" data-event="networking_analysis" />
+                <span class="sn-pill"></span>
+              </label>
+              <label class="sn-item">
+                <span class="sn-label" data-i18n="settingsNotifGapDone">Skill gap analysis done</span>
+                <input type="checkbox" class="settings-notif-event sn-check" data-event="gap_analysis" />
+                <span class="sn-pill"></span>
+              </label>
+              <label class="sn-item" style="border-bottom:none;">
+                <span class="sn-label" data-i18n="settingsNotifInactivity">Inactivity reminder (3 days)</span>
+                <input type="checkbox" class="settings-notif-event sn-check" data-event="inactivity_reminder" />
+                <span class="sn-pill"></span>
+              </label>
+
+            </div>
+          </div>
+
+          <div id="settingsNotifStatus" style="display:none;font-size:11px;color:var(--success,#057642);padding:4px 0 0;text-align:right;">
+            Saved
+          </div>
+        </div>
+
+        <!-- About section -->
+        <div class="settings-section settings-about">
+          <div class="settings-section-label" data-i18n="settingsHelpLabel">Help</div>
+          <button type="button" class="settings-link-btn" id="replayTourBtn" data-i18n="settingsReplayGuide">Replay user guide</button>
+          <div class="settings-section-label" style="margin-top:12px" data-i18n="settingsComplianceLabel">Privacy &amp; Compliance</div>
+          <a href="https://gray-mud-0ce80620f.2.azurestaticapps.net/privacy" target="_blank" rel="noopener noreferrer" id="privacyPolicyLink" class="settings-link-btn" style="display:block;text-decoration:none;cursor:pointer;"><span data-i18n="settingsPrivacyPolicy">Privacy Policy</span></a>
+          <a href="https://gray-mud-0ce80620f.2.azurestaticapps.net/terms" target="_blank" rel="noopener noreferrer" id="termsLink" class="settings-link-btn" style="display:block;text-decoration:none;cursor:pointer;"><span data-i18n="settingsTerms">Terms of Service</span></a>
+          <a href="mailto:subul@smartovate.com?subject=Data%20Deletion%20Request%20%5BSubul%20IN%5D" id="deleteDataLink" class="settings-link-btn" style="display:block;text-decoration:none;cursor:pointer;"><span data-i18n="settingsDeleteData">Delete My Data</span></a>
+          <a href="mailto:subul@smartovate.com" id="supportLink" class="settings-link-btn" style="display:block;text-decoration:none;cursor:pointer;"><span data-i18n="settingsContactSupport">Contact Support</span></a>
+          <div class="settings-section-label" style="margin-top:12px">About</div>
+          <div style="font-size:10px;color:var(--tx3)">Subul IN v3.2.0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ PAGE: PROFILE EDIT (hidden sub-page) ═══════ -->
+    <div class="page" id="page-edit">
+      <header class="page-header">
+        <button type="button" class="btn-back" data-nav="home" aria-label="Go back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <span class="page-title">Edit Profile</span>
+        <div class="page-header-right"></div>
+      </header>
+      <div class="page-body">
+        <div class="manual-inputs">
+          <div class="manual-row">
+            <div class="manual-field">
+              <label for="editName">Name</label>
+              <input type="text" id="editName" placeholder="e.g. Jihed Ayari" />
+            </div>
+            <div class="manual-field">
+              <label for="editLocation">Location</label>
+              <input type="text" id="editLocation" placeholder="e.g. Tunis, Tunisia" />
+            </div>
+          </div>
+          <div class="manual-field">
+            <label for="editHeadline">Headline</label>
+            <input type="text" id="editHeadline" placeholder="e.g. Data Science Engineer Student" />
+          </div>
+          <div class="manual-row">
+            <div class="manual-field">
+              <label for="editRole">Current Role</label>
+              <input type="text" id="editRole" placeholder="e.g. Data Scientist Intern" />
+            </div>
+            <div class="manual-field">
+              <label for="editCompany">Company / School</label>
+              <input type="text" id="editCompany" placeholder="e.g. ESPRIT" />
+            </div>
+          </div>
+          <div class="manual-field">
+            <label for="editAbout">About / Bio</label>
+            <textarea id="editAbout" rows="3" placeholder="Short description of your background, goals, expertise..."></textarea>
+          </div>
+          <div class="manual-field">
+            <label for="editSkills">Skills <span class="edit-hint-inline">(comma-separated)</span></label>
+            <input type="text" id="editSkills" placeholder="e.g. Python, Machine Learning, Data Analysis" />
+          </div>
+          <div class="manual-field">
+            <label for="editExperience">Experience <span class="edit-hint-inline">(one per line: Role @ Company)</span></label>
+            <textarea id="editExperience" rows="2" placeholder="e.g. Data Scientist Intern @ Company&#10;Research Assistant @ University"></textarea>
+          </div>
+          <div class="edit-actions">
+            <button class="btn-primary" id="editSaveBtn">Save Profile</button>
+            <button class="btn-sm" id="editCancelBtn">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /pagesContainer -->
+
+  <!-- Hidden profile card state containers (used by JS but not displayed as cards) -->
+  <div id="profileCard" style="display:none;">
+    <div class="pc-state" id="pcLoading" style="display:none;"></div>
+    <div class="pc-state" id="pcConsent" style="display:none;">
+      <div class="net-consent-icon" style="font-size:20px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>
+      <div class="net-consent-title" style="font-size:13px;font-weight:600;margin:4px 0;" data-i18n="pcConsentTitle">Profile Data Extraction</div>
+      <div class="net-consent-body" style="font-size:10px;line-height:1.4;max-height:140px;overflow-y:auto;text-align:left;">
+        <p>This extension reads your <strong>publicly visible</strong> LinkedIn profile to power AI-generated content, scoring, and networking features.</p>
+        <p>By clicking "Allow" you acknowledge:</p>
+        <ul style="margin:4px 0;padding-left:16px;">
+          <li>Data is processed locally and by our AI service for <strong>your personal use only</strong></li>
+          <li>You comply with LinkedIn's <a href="https://www.linkedin.com/legal/user-agreement" target="_blank" rel="noopener noreferrer">User Agreement</a> and applicable privacy laws (GDPR, CCPA)</li>
+          <li>You accept <strong>full responsibility</strong> for how you use the generated content and insights</li>
+          <li>Your data is <strong>not sold or shared</strong> with third parties</li>
+        </ul>
+      </div>
+      <button type="button" id="consentAllowBtn" data-i18n="pcConsentAllowBtn">Allow Extraction</button>
+      <button type="button" id="consentSkipBtn" data-i18n="pcConsentSkipBtn">Enter Manually</button>
+    </div>
+    <div class="pc-state" id="pcData" style="display:none;">
+      <span id="pcName"></span>
+      <span id="pcHeadline"></span>
+      <div id="pcAboutRow"><span id="pcAbout"></span></div>
+      <span id="pcExp"></span>
+      <div id="pcLocationRow"><span id="pcLocation"></span></div>
+      <div id="pcEduRow"><span id="pcEdu"></span></div>
+      <div id="pcSkillsRow"><span id="pcSkills"></span></div>
+      <span id="pcAvatar"></span>
+      <div id="pcSecondary"></div>
+      <span id="pcSource"></span>
+      <pre id="pcDebug" style="display:none;"></pre>
+    </div>
+    <div class="pc-state" id="pcEdit" style="display:none;"></div>
+    <button id="pcRescrapeBtn" style="display:none;"></button>
+    <button id="pcEditBtn" style="display:none;"></button>
+    <button id="pcToggle" style="display:none;"></button>
+    <button id="refreshBtn" style="display:none;"></button>
+  </div>
+
+  <!-- Loading overlay -->
+  <div class="loading-overlay" id="loadingOverlay" role="status" aria-live="polite">
+    <div class="spinner"></div>
+    <span id="loadingMsg">Generating...</span>
+    <span class="loading-elapsed" id="loadingElapsed"></span>
+    <button type="button" class="loading-cancel" id="loadingCancelBtn" style="display:none;">Cancel</button>
+  </div>
+
+  <!-- Onboarding Tour -->
+  <div id="tourOverlay" class="tour-overlay hidden" aria-hidden="true">
+    <div id="tourTooltip" class="tour-tooltip">
+      <div class="tour-step-label" id="tourStepLabel">Step 1 of 7</div>
+      <div id="tourProgress" class="tour-progress"></div>
+      <div class="tour-body" id="tourBody"></div>
+      <div class="tour-actions">
+        <button type="button" class="tour-skip" id="tourSkip">Skip guide</button>
+        <button type="button" class="btn-accent tour-next" id="tourNext">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legacy compatibility: chat drawer elements (hidden, JS looks for these) -->
+  <div id="chatDrawer" style="display:none;"></div>
+  <button id="chatBtn" style="display:none;"></button>
+  <button id="chatCloseBtn" style="display:none;"></button>
+
+  <!-- Old tab nav (hidden, JS references these) -->
+  <nav class="tabs" style="display:none;">
+    <button class="tab active" data-tab="post">Post</button>
+    <button class="tab" data-tab="profile">Profile</button>
+    <button class="tab" data-tab="networking">Network</button>
+    <button class="tab" data-tab="gap">Gap</button>
+  </nav>
+  <div class="tab-content active" id="tab-post" style="display:none;"></div>
+  <div class="tab-content" id="tab-profile" style="display:none;"></div>
+  <div class="tab-content" id="tab-networking" style="display:none;"></div>
+  <div class="tab-content" id="tab-gap" style="display:none;"></div>
+
+  <!-- Extraction Warning Modal -->
+  <div id="extractWarningOverlay" style="display:none;">
+    <div id="extractWarningModal">
+      <div class="ewm-icon-wrap">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+        </svg>
+      </div>
+      <div class="ewm-title" data-i18n="ewmTitle">Before we extract your profile</div>
+      <ol class="ewm-steps">
+        <li><span class="ewm-step-num">1</span><span>Switch to your LinkedIn tab and <strong>scroll all the way to the bottom</strong> of your profile page so all sections are fully loaded.</span></li>
+        <li><span class="ewm-step-num">2</span><span>Come back here and click <strong>"Start Extraction"</strong>.</span></li>
+        <li class="ewm-warn"><span class="ewm-step-num ewm-step-warn">3</span><span><strong>Do NOT</strong> switch tabs or scroll during extraction — it may interrupt the process.</span></li>
+      </ol>
+      <!-- Privacy trust banner -->
+      <div class="ewm-privacy-banner">
+        <div class="ewm-privacy-row">
+          <svg class="ewm-privacy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>Your data stays <strong>on your device</strong> — we never sell or share it</span>
+        </div>
+        <div class="ewm-privacy-row">
+          <svg class="ewm-privacy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          <span>Only <strong>publicly visible</strong> profile info is read — no private data</span>
+        </div>
+        <div class="ewm-privacy-row">
+          <svg class="ewm-privacy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Used <strong>only for you</strong> — to power AI features in this extension</span>
+        </div>
+      </div>
+      <div class="ewm-actions">
+        <button type="button" id="ewmCancelBtn" data-i18n="ewmCancelBtn">Cancel</button>
+        <button type="button" id="ewmStartBtn" class="btn-primary" data-i18n="ewmStartBtn">I Understand, Start Extraction</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="i18n.js"></script>
+  <script src="popup.js"></script>
+</body>
+
+</html>

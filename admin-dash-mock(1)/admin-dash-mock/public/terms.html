@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Terms of Service - Subul IN</title>
+  <meta name="description" content="Terms of Service for Subul IN, the AI LinkedIn copilot Chrome extension." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --bg:#f9fafb; --surface:#fff; --border:#e5e7eb; --text:#111827; --sub:#6b7280; --accent:#0a66c2; --accent-light:#eff6ff; --radius:12px; --shadow:0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04); }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 15px; line-height: 1.7; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 10px; height: 56px; position: sticky; top: 0; z-index: 100; }
+    .nav-logo { display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text); font-weight: 700; font-size: 16px; }
+    .nav-logo svg { flex-shrink: 0; }
+    .nav-badge { margin-left: auto; font-size: 12px; color: var(--sub); background: var(--bg); border: 1px solid var(--border); border-radius: 20px; padding: 2px 10px; }
+    .hero { background: linear-gradient(135deg, #0a66c2 0%, #1d4ed8 100%); color: #fff; padding: 56px 24px 48px; text-align: center; }
+    .hero-icon { width: 56px; height: 56px; background: rgba(255,255,255,.18); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
+    .hero h1 { font-size: clamp(24px, 5vw, 36px); font-weight: 800; margin-bottom: 10px; }
+    .hero p { font-size: 16px; opacity: .85; max-width: 540px; margin: 0 auto 20px; }
+    .hero-meta { display: inline-flex; gap: 24px; flex-wrap: wrap; justify-content: center; font-size: 13px; opacity: .75; }
+    .hero-meta span { display: flex; align-items: center; gap: 5px; }
+    .container { max-width: 820px; margin: 0 auto; padding: 40px 20px 80px; }
+    .toc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px 28px; margin-bottom: 40px; box-shadow: var(--shadow); }
+    .toc h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--sub); margin-bottom: 14px; }
+    .toc ol { padding-left: 20px; display: grid; gap: 6px; }
+    .toc li { font-size: 14px; }
+    .toc a { color: var(--accent); text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 32px; margin-bottom: 20px; box-shadow: var(--shadow); scroll-margin-top: 72px; }
+    .section-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+    .section-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: var(--accent-light); color: var(--accent); }
+    .section-icon svg { width: 20px; height: 20px; }
+    .section-num { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
+    .section h2 { font-size: 18px; font-weight: 700; }
+    p { margin-bottom: 14px; }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 22px; margin-bottom: 14px; display: grid; gap: 6px; }
+    .info-box { display: flex; gap: 12px; align-items: flex-start; border-radius: 8px; padding: 14px 16px; margin: 16px 0; font-size: 14px; }
+    .info-box svg { flex-shrink: 0; margin-top: 1px; }
+    .info-green { background: #f0fdf4; color: #14532d; border: 1px solid #bbf7d0; }
+    .contact-card { background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%); border: 1px solid #c7d2fe; border-radius: var(--radius); padding: 24px; text-align: center; margin-top: 20px; }
+    .contact-card h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; color: #1e3a8a; }
+    .contact-card p { font-size: 14px; color: #3730a3; margin-bottom: 12px; }
+    .contact-card a { display: inline-flex; align-items: center; gap: 6px; background: var(--accent); color: #fff; text-decoration: none; border-radius: 8px; padding: 9px 18px; font-size: 14px; font-weight: 600; }
+    .contact-card a:hover { background: #0950a0; }
+    footer { border-top: 1px solid var(--border); padding: 24px; text-align: center; font-size: 13px; color: var(--sub); }
+    footer a { color: var(--accent); text-decoration: none; }
+    @media (max-width: 600px) { .section { padding: 20px; } .hero { padding: 36px 16px 30px; } }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-logo" href="https://app.subul.uk" rel="noopener noreferrer">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0a66c2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+    Subul IN
+  </a>
+  <span class="nav-badge">v3.2.0</span>
+</nav>
+
+<div class="hero">
+  <div class="hero-icon">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2z"/></svg>
+  </div>
+  <h1>Terms of Service</h1>
+  <p>Subul IN - AI LinkedIn Copilot Chrome Extension</p>
+  <div class="hero-meta">
+    <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Effective: May 31, 2026</span>
+    <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.22-8.56"/><polyline points="22 4 12 14.01 9 11"/></svg>Last Updated: May 31, 2026</span>
+    <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Version 3.2.0</span>
+  </div>
+</div>
+
+<div class="container">
+  <div class="info-box info-green" style="margin-top:20px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+    <div>By installing, accessing, or using Subul IN, you agree to these Terms of Service and the Privacy Policy. The extension is designed for user-initiated analysis only.</div>
+  </div>
+
+  <div class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#s1">Acceptance of Terms</a></li>
+      <li><a href="#s2">Service Description</a></li>
+      <li><a href="#s3">Eligibility and Accounts</a></li>
+      <li><a href="#s4">Acceptable Use</a></li>
+      <li><a href="#s5">AI Features and Outputs</a></li>
+      <li><a href="#s6">Privacy and Data</a></li>
+      <li><a href="#s7">Intellectual Property</a></li>
+      <li><a href="#s8">Availability and Changes</a></li>
+      <li><a href="#s9">Termination</a></li>
+      <li><a href="#s10">Disclaimers and Liability</a></li>
+      <li><a href="#s11">Changes to These Terms</a></li>
+      <li><a href="#s12">Contact</a></li>
+    </ol>
+  </div>
+
+  <div class="section" id="s1"><div class="section-header"><div class="section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M12 2l7 4v6c0 5-3.5 9.7-7 10-3.5-.3-7-5-7-10V6l7-4z"/></svg></div><div><div class="section-num">Section 1</div><h2>Acceptance of Terms</h2></div></div><p>These Terms govern your access to and use of Subul IN, including the Chrome extension, website, APIs, and related services. If you do not agree to these Terms, do not install or use the service.</p><p>We may require you to accept updated Terms before continuing to use the service after material changes.</p></div>
+  <div class="section" id="s2"><div class="section-header"><div class="section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M4 12h10"/><path d="M4 17h16"/></svg></div><div><div class="section-num">Section 2</div><h2>Service Description</h2></div></div><p>Subul IN is a productivity tool that helps users create posts, review profiles, and generate networking insights from content they choose to analyze. Some features use Microsoft Azure OpenAI Service and Microsoft Azure cloud services.</p><p>Subul IN is independently operated by Smartovate Technologies and is not affiliated with, endorsed by, or sponsored by LinkedIn Corporation or Microsoft Corporation.</p><p><strong>Subscription and fees:</strong> Subul IN is currently offered as part of the Subul educational and professional development platform. Some features may be free while others may require a subscription or be subject to usage limits. If paid plans are introduced, pricing, billing, renewal, and cancellation terms will be presented at the point of purchase and will form part of these Terms, together with any cancellation and refund rights required by applicable law.</p></div>
+  <div class="section" id="s3"><div class="section-header"><div class="section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg></div><div><div class="section-num">Section 3</div><h2>Eligibility and Accounts</h2></div></div><p>You may use Subul IN only if you are at least 16 years old, or the minimum age required by applicable local law, and you can form a binding agreement with us.</p><p>You are responsible for the accuracy of the information you provide, for maintaining the security of your account, and for all activity that occurs through your use of the service.</p></div>
+  <div class="section" id="s4"><div class="section-header"><div class="section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><div><div class="section-num">Section 4</div><h2>Acceptable Use</h2></div></div><p>You agree not to misuse the service. Prohibited conduct includes:</p><ul><li>Automating LinkedIn activity beyond the user-triggered actions supported by the extension.</li><li>Scraping, harvesting, or collecting data at scale without user action or permission.</li><li>Bypassing access controls, rate limits, or account restrictions.</li><li>Uploading malware, malicious code, or unsafe content.</li><li>Impersonating another person or misrepresenting your identity.</li><li>Using the service to violate law, platform policies, or third-party rights.</li><li>Reverse engineering or interfering with the service except where law expressly allows it.</li></ul></div>
+  <div class="section" id="s5"><div class="section-header"><div class="section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg></div><div><div class="section-num">Section 5</div><h2>AI Features and Outputs</h2></div></div><p>AI features may produce incomplete, incorrect, or outdated results. You are responsible for reviewing any AI-generated output before relying on it.</p><p>AI output is provided for informational and productivity purposes only and is not legal, employment, financial, or professional advice.</p><p>We do not guarantee that AI output will be accurate, unbiased, available at all times, or suitable for any particular purpose.</p></div>
+  <div class="section" id="s6"><div class="section-header"><div class="section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><div><div class="section-num">Section 6</div><h2>Privacy and Data</h2></div></div><p>Your use of Subul IN is also governed by the Privacy Policy, which explains what data we collect, how we process it, and how long we retain it.</p><p>By using the service, you acknowledge that some features rely on LinkedIn page content you choose to analyze and on Subul-owned authentication and backend services.</p></div>
+  <div class="section" id="s7"><div class="section-header"><div class="section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><div><div class="section-num">Section 7</div><h2>Intellectual Property</h2></div></div><p>The service, its design, software, logos, and content are owned by Smartovate Technologies or its licensors and are protected by applicable intellectual property laws.</p><p>You are granted a limited, revocable, non-exclusive, non-transferable license to use the service for its intended purpose. No ownership rights are transferred to you.</p></div>
+  <div class="section" id="s8"><div class="section-header"><div class="section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div><div class="section-num">Section 8</div><h2>Availability and Changes</h2></div></div><p>We may modify, suspend, or discontinue any part of the service at any time, with or without notice, to the extent permitted by law.</p><p>We do not guarantee uninterrupted access, error-free operation, or compatibility with every browser, device, or LinkedIn interface change.</p></div>
+  <div class="section" id="s9"><div class="section-header"><div class="section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></div><div><div class="section-num">Section 9</div><h2>Termination</h2></div></div><p>We may suspend or terminate your access if you violate these Terms, misuse the service, or use the service in a way that creates risk to us, other users, or third parties.</p><p>You may stop using the service at any time by uninstalling the extension and discontinuing access to the website and related services.</p></div>
+  <div class="section" id="s10"><div class="section-header"><div class="section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><div><div class="section-num">Section 10</div><h2>Disclaimers and Liability</h2></div></div><p>The service is provided on an "as is" and "as available" basis to the fullest extent permitted by law. We make no warranties, express or implied, including warranties of merchantability, fitness for a particular purpose, and non-infringement.</p><p>To the fullest extent permitted by law, Smartovate Technologies is not liable for indirect, incidental, special, consequential, or punitive damages, or for lost profits, data loss, or business interruption arising from your use of the service.</p><p>Nothing in these Terms excludes or limits liability that cannot be excluded or limited under applicable law.</p><p><strong>Governing law:</strong> These Terms are governed by the laws of England and Wales, and the courts of England and Wales shall have jurisdiction over any dispute arising out of or relating to these Terms or the service, subject to any mandatory consumer-protection rights available to you in your country of residence.</p></div>
+  <div class="section" id="s11"><div class="section-header"><div class="section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6"/><path d="M2.5 12a10 10 0 0 1 17.8-6.3L21.5 8"/><path d="M2.5 22v-6h6"/><path d="M21.5 12a10 10 0 0 1-17.8 6.3L2.5 16"/></svg></div><div><div class="section-num">Section 11</div><h2>Changes to These Terms</h2></div></div><p>We may update these Terms from time to time. When we make material changes, we will update the effective date and may provide additional notice in the product or on the website.</p></div>
+  <div class="section" id="s12"><div class="section-header"><div class="section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div><div><div class="section-num">Section 12</div><h2>Contact</h2></div></div><p>For questions about these Terms, contact us at <a href="mailto:subul@smartovate.com">subul@smartovate.com</a>.</p><div class="contact-card"><h3>Business Contact</h3><p>Smartovate Technologies Ltd<br>71-75 Shelton Street<br>London WC2H 9JQ, United Kingdom</p><a href="https://app.subul.uk" target="_blank" rel="noopener noreferrer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>app.subul.uk</a></div></div>
+</div>
+
+<footer>
+  <p>© 2026 Subul IN · <a href="/privacy" rel="noopener noreferrer">Privacy Policy</a> · <a href="https://app.subul.uk" target="_blank" rel="noopener noreferrer">app.subul.uk</a> · Effective May 31, 2026 · Version 3.2.0</p>
+</footer>
+
+</body>
+</html>

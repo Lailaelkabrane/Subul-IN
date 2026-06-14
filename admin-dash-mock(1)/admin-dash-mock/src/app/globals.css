@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Login page — branding panel */
+  .login-panel {
+    background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 40%, #4338ca 100%);
+  }
+  .login-blob-tr {
+    background: radial-gradient(circle, #fff 0%, transparent 70%);
+    transform: translate(30%, -30%);
+  }
+  .login-blob-bl {
+    background: radial-gradient(circle, #fff 0%, transparent 70%);
+    transform: translate(-30%, 30%);
+  }
+  .login-icon-bg {
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(8px);
+  }
+  .login-feature-dot {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  .login-btn {
+    background: linear-gradient(135deg, #2563eb, #4338ca);
+  }
+  .login-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #1d4ed8, #3730a3);
+  }
+
+  /* Card hover lift */
+  .card-hover {
+    @apply transition-all duration-200 hover:shadow-md hover:-translate-y-0.5;
+  }
+
+  /* Dynamic progress bar — width driven by --bar-width CSS custom property */
+  .bar-fill {
+    height: 100%;
+    border-radius: 9999px;
+    transition: width 500ms ease;
+    width: var(--bar-width, 0%);
+  }
+}

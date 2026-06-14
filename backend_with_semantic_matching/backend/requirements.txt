@@ -1,0 +1,35 @@
+# ── Existing dependencies ────────────────────────────────────
+fastapi==0.115.0
+uvicorn==0.30.6
+httpx==0.27.2
+python-dotenv==1.0.1
+pydantic==2.9.2
+python-jose[cryptography]==3.3.0
+bcrypt==4.1.3
+azure-cosmos==4.7.0
+aiohttp==3.9.5
+
+# ── LangGraph / LangChain (ajoutés pour agent.py) ────────────
+langgraph>=0.2.0
+langchain>=0.3.0
+langchain-openai>=0.2.0
+
+# ── Semantic industry matching (Enhancement 1) + RAG (Enhancement 2) ──
+# Model: paraphrase-multilingual-MiniLM-L12-v2 (~470 MB, 384-dim, 50+ languages)
+#   Chosen to run on an Azure App Service B1 (1.75 GB RAM). For higher
+#   cross-language accuracy on a B2+ plan, swap the model name in
+#   embedding_service.py to paraphrase-multilingual-mpnet-base-v2 (768-dim).
+# Activate semantic matching: set USE_SEMANTIC_INDUSTRY=true in .env
+#
+# VERSIONS ARE PINNED ON PURPOSE. Letting the resolver pick "latest" pulled
+# sentence-transformers 5.x + transformers 5.x, whose lazy import is broken
+# ("Could not import module 'PreTrainedModel'"). The pinned set below is a
+# known-compatible, production-tested trio (torch 2.4 / transformers 4.44 /
+# sentence-transformers 3.1). Do not loosen these without re-testing on B1.
+#
+# CPU-only torch keeps the deploy small and the memory footprint low (the
+# default PyPI torch bundles large GPU/CUDA libs you don't need).
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.4.1
+transformers==4.44.2
+sentence-transformers==3.1.1

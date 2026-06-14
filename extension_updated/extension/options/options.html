@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Subul IN — Settings</title>
+  <style>
+    :root {
+      --bg: #ffffff; --bg-s: #f3f2ef; --text: #191919;
+      --text-s: #666; --accent: #6941c6; --border: #e0e0e0;
+      --success: #057642; --success-bg: #e6f4ed; --error: #cc1016;
+      --radius: 8px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: var(--text); background: var(--bg-s); min-height: 100vh;
+      display: flex; justify-content: center; padding: 40px 20px;
+    }
+    .container { max-width: 520px; width: 100%; }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 10px; }
+    .subtitle { color: var(--text-s); font-size: 13px; margin-bottom: 24px; }
+    .card { background: var(--bg); border-radius: var(--radius); border: 1px solid var(--border); padding: 20px; margin-bottom: 16px; }
+    .card-title { font-size: 14px; font-weight: 700; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+    .field { margin-bottom: 14px; }
+    .field:last-child { margin-bottom: 0; }
+    .field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-s); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .field input { width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; }
+    .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,70,229,.15); }
+    .field .hint { font-size: 11px; color: var(--text-s); margin-top: 3px; }
+    .status-row { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--bg-s); border-radius: 6px; font-size: 12px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; flex-shrink: 0; }
+    .dot.ok { background: #057642; }
+    .dot.err { background: var(--error); }
+    .actions { display: flex; gap: 10px; margin-top: 20px; }
+    .btn { padding: 10px 20px; border: none; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; transition: 150ms ease; }
+    .btn-primary { background: linear-gradient(135deg, #c026d3, #6941c6, #7e22ce); color: white; }
+    .btn-primary:hover { background: #4a1f8c; }
+    .btn-secondary { background: var(--bg-s); color: var(--text-s); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: #e9e5df; }
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 10px 20px; border-radius: var(--radius); font-size: 13px; font-weight: 600; display: none; z-index: 100; }
+    .toast.success { background: var(--success-bg); color: var(--success); display: block; }
+    .toast.error { background: #fce8e6; color: var(--error); display: block; }
+    .perm-list { list-style: none; display: grid; gap: 8px; padding-left: 0; }
+    .perm-list li { background: var(--bg-s); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-size: 12px; color: var(--text); }
+    .perm-list strong { display: block; font-size: 12px; margin-bottom: 2px; }
+    .legal-links a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    .legal-links a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>
+      <span style="width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </span>
+      Settings
+    </h1>
+    <p class="subtitle">Configure your backend server connection</p>
+
+    <div class="card">
+      <div class="card-title">Backend Server</div>
+      <div class="field">
+        <label>Server URL</label>
+        <input type="text" id="serverUrl" placeholder="http://127.0.0.1:8010" />
+        <div class="hint">URL of your FastAPI backend server</div>
+      </div>
+      <div class="status-row">
+        <div class="dot" id="statusDot"></div>
+        <span id="statusText">Not tested yet</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="saveBtn">Save</button>
+      <button class="btn btn-secondary" id="testBtn">Test Connection</button>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div class="card-title">Email Notifications</div>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+          <input type="checkbox" id="emailEnabled" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;" />
+          <span style="font-size:13px;font-weight:600;color:var(--text);">Enable email notifications</span>
+        </label>
+        <div class="hint" style="margin-top:6px;">Receive activity alerts by email when your analyses are ready.</div>
+      </div>
+      <div id="emailEventsSection" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+        <label style="font-size:12px;font-weight:600;color:var(--text-s);text-transform:uppercase;letter-spacing:0.3px;display:block;margin-bottom:10px;">Notify me about</label>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;font-size:13px;">
+          <input type="checkbox" class="event-check" data-event="profile_extracted" style="accent-color:var(--accent);" />
+          Profile extracted — when your LinkedIn profile is saved
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;font-size:13px;">
+          <input type="checkbox" class="event-check" data-event="ai_score" style="accent-color:var(--accent);" />
+          AI Profile Score — when your score analysis is ready
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;font-size:13px;">
+          <input type="checkbox" class="event-check" data-event="networking_analysis" style="accent-color:var(--accent);" />
+          Network analysis — when your connection scan is complete
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+          <input type="checkbox" class="event-check" data-event="gap_analysis" style="accent-color:var(--accent);" />
+          Skill gap analysis — results vs. a target profile
+        </label>
+      </div>
+      <div style="margin-top:14px;">
+        <button class="btn btn-primary" id="saveNotifBtn" style="padding:8px 16px;font-size:12px;">Save Notification Settings</button>
+        <span id="notifStatus" style="font-size:12px;color:var(--success);margin-left:10px;display:none;">Saved!</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Permissions &amp; Security</div>
+      <ul class="perm-list">
+        <li><strong>activeTab</strong> Accesses the current LinkedIn tab only when you click Analyze, Generate, or Scan.</li>
+        <li><strong>storage</strong> Saves your preferences and cached UI state in chrome.storage.local and chrome.storage.sync.</li>
+        <li><strong>scripting</strong> Injects the analysis script into LinkedIn pages after you trigger an action.</li>
+        <li><strong>alarms</strong> Schedules limited reminders and delayed follow-ups (no background scraping).</li>
+      </ul>
+      <div class="field" style="margin-top:12px;">
+        <div class="hint">Hosts: https://www.linkedin.com/*, https://linkedin.com/*, https://*.subul.uk/*, https://subulin-api.azurewebsites.net/*</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Legal</div>
+      <div class="legal-links">
+        <a href="https://gray-mud-0ce80620f.2.azurestaticapps.net/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+        <span style="margin:0 6px;color:var(--text-s);">|</span>
+        <a href="https://gray-mud-0ce80620f.2.azurestaticapps.net/terms" target="_blank" rel="noopener noreferrer">Terms of Use</a>
+      </div>
+      <div class="hint" style="margin-top:8px;">Review how we handle data and the terms for using Subul IN.</div>
+    </div>
+
+    <div class="card" style="border-color: var(--error);">
+      <div class="card-title" style="color: var(--error); border-bottom-color: var(--error);">Delete My Data</div>
+      <div class="hint" style="margin-bottom:12px;">
+        Permanently delete your account and <strong>all</strong> associated data —
+        profile snapshots, AI scores, gap analyses, networking history, chats, and
+        the AI Assistant's memory of your activity. This <strong>cannot be undone</strong>.
+      </div>
+      <div class="field">
+        <label>Type <strong>DELETE</strong> to confirm</label>
+        <input type="text" id="deleteConfirm" placeholder="DELETE" autocomplete="off" />
+      </div>
+      <button class="btn" id="deleteDataBtn"
+        style="background: var(--error); color: #fff; margin-top:6px;" disabled>
+        Delete my account and all data
+      </button>
+    </div>
+
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+export const ACTION_LABELS: Record<string, string> = {
+  generate_post:       'Post',
+  generate_profile:    'Profile',
+  route_chat:          'Chat',
+  profile_snapshot:    'Snapshot',
+  gap_analysis:        'Gap Analysis',
+  ai_score:            'AI Score',
+  networking_message:  'Networking',
+  networking_analyze:  'Deep Analysis',
+  networking_chat:     'Net Chat',
+  conversation_coach:  'Coach',
+  subul_login:         'Subul Login',
+  job_fit_analysis:    'Job Fit',
+  interview_prep:      'Interview Prep',
+};
+
+export const ACTION_COLORS: Record<string, string> = {
+  generate_post:       'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  generate_profile:    'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  route_chat:          'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+  profile_snapshot:    'bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
+  gap_analysis:        'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+  ai_score:            'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+  networking_message:  'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+  networking_analyze:  'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
+  networking_chat:     'bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
+  conversation_coach:  'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
+  subul_login:         'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+  job_fit_analysis:    'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  interview_prep:      'bg-lime-50 text-lime-700 dark:bg-lime-900/30 dark:text-lime-400',
+};
+
+export const ACTION_STYLES_FEED: Record<string, string> = {
+  generate_post:       'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  generate_profile:    'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+  route_chat:          'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+  profile_snapshot:    'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  gap_analysis:        'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+  ai_score:            'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+  networking_message:  'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',
+  networking_analyze:  'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
+  networking_chat:     'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+  conversation_coach:  'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+  subul_login:         'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+  job_fit_analysis:    'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  interview_prep:      'bg-lime-100 text-lime-700 dark:bg-lime-900/40 dark:text-lime-300',
+};
