@@ -14,7 +14,7 @@ SECRET_KEY   = os.getenv("JWT_SECRET", "change-me-secret")
 ALGORITHM    = "HS256"
 EXPIRE_HOURS = 24
 
-# Admin credentials from .env (email + password, no more raw secret key)
+# Admin credentials loaded from .env
 ADMIN_EMAIL    = os.getenv("ADMIN_EMAIL", "admin@linkedin.ai")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
@@ -60,7 +60,7 @@ def verify_admin_password(password: str) -> bool:
 async def get_current_user_optional(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> Optional[str]:
-    """Returns the user's document ID (JWT 'sub' claim) or None if unauthenticated."""
+    """Return the user document ID from the JWT token, or None if not authenticated."""
     if not credentials:
         return None
     try:

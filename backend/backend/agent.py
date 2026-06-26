@@ -1,35 +1,14 @@
 """
-agent.py — LangGraph Agentic Workflow for Subul IN
-====================================================
-Ce module implémente un graph LangGraph qui orchestre les analyses de profil
-LinkedIn de manière agentique. Il s'intègre dans main.py via la route
-`/agent/full-analysis` sans modifier aucune route existante.
+agent.py - LangGraph workflow for Subul IN.
 
-WORKFLOW :
-    [START]
-        ↓
-    [extract_profile]      — normalise et valide le profil utilisateur
-        ↓
-    [compute_ai_score]     — calcule le score IA du profil (0-100)
-        ↓
-    [run_gap_analysis]     — compare avec un profil cible (si fourni)
-        ↓
-    [generate_recommendations] — synthèse finale + quick wins prioritisés
-        ↓
-    [END]
+This module builds a LangGraph graph that runs the LinkedIn profile analysis
+pipeline. It is wired into main.py through the /agent/full-analysis route.
 
-INTÉGRATION dans main.py :
-    from agent import run_full_analysis, AgentState
-
-    @app.post("/agent/full-analysis")
-    async def full_analysis(data: FullAnalysisRequest, user_doc_id=Depends(...)):
-        result = await run_full_analysis(
-            user_profile=data.user_profile,
-            target_profile=data.target_profile,   # optionnel
-            goal=data.goal,
-            user_doc_id=user_doc_id,
-        )
-        return {"success": True, "data": result}
+Workflow order:
+    extract_profile  ->  compute_ai_score  ->  (smart router)
+    low score  ->  deep_diagnostic  ->  generate_recommendations
+    has target ->  run_gap_analysis  ->  generate_recommendations
+    otherwise  ->  generate_recommendations directly
 """
 
 from __future__ import annotations
@@ -45,9 +24,7 @@ from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
 
 
-# ─────────────────────────────────────────────────────────────
-#  SHARED HTTP CLIENT  (réutilise la même config que main.py)
-# ─────────────────────────────────────────────────────────────
+# Reuse a single HTTP client across all Azure calls instead of creating one per request
 
 _azure_client = httpx.AsyncClient(
     timeout=httpx.Timeout(180.0, connect=15.0),
@@ -56,9 +33,7 @@ _azure_client = httpx.AsyncClient(
 )
 
 
-# ─────────────────────────────────────────────────────────────
-#  AZURE OPENAI HELPER  (mini-version autonome pour l'agent)
-# ─────────────────────────────────────────────────────────────
+# Minimal Azure OpenAI helper used by the agent nodes
 
 AZURE_ENDPOINT    = os.getenv("AZURE_ENDPOINT", "").rstrip("/")
 AZURE_API_KEY     = os.getenv("AZURE_API_KEY", "")
@@ -68,7 +43,7 @@ DEPLOYMENT        = os.getenv("POST_DEPLOYMENT", "gpt-4o-mini-2024-07-18-postage
 
 async def _call_azure(system: str, user: str, temperature: float = 0.4,
                       max_tokens: int = 1200) -> str:
-    """Appel minimal à Azure OpenAI. Retourne le texte brut ou lève une RuntimeError."""
+    """Call the Azure OpenAI API and return the raw text, or raise RuntimeError on failure."""
     if not AZURE_ENDPOINT or not AZURE_API_KEY:
         raise RuntimeError("Azure credentials manquants dans .env")
 
@@ -96,42 +71,35 @@ async def _call_azure(system: str, user: str, temperature: float = 0.4,
     return body["choices"][0]["message"]["content"].strip()
 
 
-# ─────────────────────────────────────────────────────────────
-#  ÉTAT DU GRAPH  (TypedDict partagé entre tous les nœuds)
-# ─────────────────────────────────────────────────────────────
+# Shared state passed between all graph nodes
 
 class AgentState(TypedDict, total=False):
-    # ── Entrées ──────────────────────────────────────────────
-    user_profile:   dict          # profil LinkedIn scrappé de l'utilisateur
-    target_profile: Optional[dict]  # profil cible (peut être None)
+    # Input fields
+    user_profile:   dict          # scraped LinkedIn profile of the user
+    target_profile: Optional[dict]  # target profile to compare against (can be None)
     goal:           str           # job_search | clients | investors | learning
-    user_doc_id:    Optional[str] # ID Cosmos DB de l'utilisateur
+    user_doc_id:    Optional[str] # Cosmos DB document ID for the user
     ui_lang:        str           # EN | FR
 
-    # ── Résultats intermédiaires ──────────────────────────────
-    normalized_profile: dict      # profil nettoyé par extract_profile
-    ai_score_result:    dict      # résultat de compute_ai_score
-    gap_result:         Optional[dict]  # résultat de run_gap_analysis (si target fourni)
+    # Intermediate results built up by each node
+    normalized_profile: dict      # cleaned profile from extract_profile
+    ai_score_result:    dict      # output of compute_ai_score
+    gap_result:         Optional[dict]  # output of run_gap_analysis (None if no target)
 
-    # ── Sortie finale ─────────────────────────────────────────
-    recommendations: dict         # synthèse + quick_wins prioritisés
-    errors:          list[str]    # erreurs non-bloquantes accumulées
+    # Final output
+    recommendations: dict         # summary with prioritised actions
+    errors:          list[str]    # non-fatal errors collected during the run
 
 
-# ─────────────────────────────────────────────────────────────
-#  NŒUD 1 : extract_profile
-#  Normalise et valide le profil. Calcule des stats rapides.
-# ─────────────────────────────────────────────────────────────
+# Node 1: extract_profile
+# Cleans and validates the user profile fields before scoring
 
 def _node_extract_profile(state: AgentState) -> AgentState:
-    """
-    Nœud synchrone : normalise le profil utilisateur.
-    Pas d'appel LLM ici — juste du traitement de données.
-    """
+    """Clean and normalize the user profile. No LLM call here, just data processing."""
     profile = state.get("user_profile") or {}
     errors  = list(state.get("errors") or [])
 
-    # Normalise les champs clés
+    # Normalize the main profile fields
     normalized = {
         "name":       profile.get("name") or profile.get("fullName") or "",
         "headline":   profile.get("headline") or profile.get("currentRole") or "",
@@ -149,7 +117,7 @@ def _node_extract_profile(state: AgentState) -> AgentState:
         ][:5],
         "location":   profile.get("location") or "",
         "industry":   profile.get("industry") or "",
-        # Métriques réseau
+        # Network metrics
         "connections": _safe_int(
             profile.get("connectionsCount") or profile.get("connections_count") or
             profile.get("connections")
@@ -158,14 +126,14 @@ def _node_extract_profile(state: AgentState) -> AgentState:
             profile.get("followersCount") or profile.get("followers_count") or
             profile.get("followers")
         ),
-        # Activité contenu
+        # Content activity
         "last_post_days":  profile.get("last_post_days"),
         "post_count_30d":  profile.get("post_count_30d") or 0,
-        # Certifications Subul enrichies
+        # Certifications from Subul enrichment
         "_subul_certs": profile.get("_subul_certs", ""),
     }
 
-    # Avertissement si le profil est trop vide
+    # Warn if the profile has too little content to score reliably
     has_content = bool(normalized["headline"] or normalized["about"] or normalized["experience"])
     if not has_content:
         errors.append("Profil utilisateur trop vide — résultats moins précis.")
@@ -180,10 +148,8 @@ def _safe_int(val) -> int:
         return 0
 
 
-# ─────────────────────────────────────────────────────────────
-#  NŒUD 2 : compute_ai_score
-#  Scoring du profil via Azure OpenAI (déterministe + LLM).
-# ─────────────────────────────────────────────────────────────
+# Node 2: compute_ai_score
+# Scores the normalized profile using Azure OpenAI
 
 def _score_system(lang: str = "EN") -> str:
     if lang.upper() == "FR":
@@ -239,7 +205,7 @@ Grade     : 0-29=F, 30-44=D, 45-59=C, 60-74=B, 75-89=A, 90-100=A+.
 CRITICAL: same input → ALWAYS same output. NEVER vary for the same profile."""
 
 async def _node_compute_ai_score(state: AgentState) -> AgentState:
-    """Calcule le score IA du profil normalisé."""
+    """Score the normalized profile and return the result."""
     profile = state.get("normalized_profile") or state.get("user_profile") or {}
     if not isinstance(profile, dict):
         profile = {}
@@ -267,33 +233,63 @@ async def _node_compute_ai_score(state: AgentState) -> AgentState:
         f"CONNEXIONS : {profile.get('connections', 0)} | FOLLOWERS : {profile.get('followers', 0)}\n"
     )
 
+    async def _attempt_score(temperature: float) -> dict:
+        """Run one scoring attempt. Raises on failure so the caller can retry."""
+        raw = await _call_azure(_score_system(state.get("ui_lang", "EN")), user_prompt,
+                                 temperature=temperature, max_tokens=700)
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as je:
+            # Azure sometimes returns malformed JSON (e.g. a repeated token loop cut off by max_tokens).
+            # Log the raw output and let the caller retry.
+            logging.error(
+                f"[agent] compute_ai_score JSON parse failed (temp={temperature}): {je}\n"
+                f"Raw LLM output was: {raw[:500]}"
+            )
+            raise
+        if not isinstance(parsed, dict):
+            raise ValueError(f"LLM returned non-dict: {type(parsed)} = {parsed}")
+        return parsed
+
     try:
-        raw = await _call_azure(_score_system(state.get("ui_lang", "EN")), user_prompt, temperature=0.0, max_tokens=700)
-        score_result = json.loads(raw)
-        if not isinstance(score_result, dict):
-            raise ValueError(f"LLM returned non-dict: {type(score_result)} = {score_result}")
-        # Normalize sections — LLM sometimes returns {"headline": 5} instead of {"headline": {"score":5,"tip":""}}
-        for k, v in (score_result.get("sections") or {}).items():
+        try:
+            score_result = await _attempt_score(temperature=0.0)
+        except json.JSONDecodeError:
+            # Retry with a small temperature change so we don't get the same bad output again.
+            errors.append("ai_score warning: first attempt returned malformed JSON, retried")
+            score_result = await _attempt_score(temperature=0.3)
+
+        # Normalize section format - the LLM sometimes returns a plain number instead of {score, tip}
+        score_result["sections"] = score_result.get("sections") or {}
+        if not isinstance(score_result["sections"], dict):
+            score_result["sections"] = {}
+        for k, v in list(score_result["sections"].items()):
             if not isinstance(v, dict):
                 score_result["sections"][k] = {"score": int(v) if isinstance(v, (int, float)) else 0, "tip": ""}
-        # Calculate overall score ourselves — don't trust LLM's math
+        # Calculate the overall score using fixed weights rather than trusting the LLM's math
         # Weights: headline 20%, about 25%, experience 30%, skills 15%, education 10%
-        sections = score_result.get("sections") or {}
+        sections = score_result["sections"]
         weights = {"headline": 0.20, "about": 0.25, "experience": 0.30, "skills": 0.15, "education": 0.10}
         weighted = sum(
-            sections.get(k, {}).get("score", 0) * w
+            (sections.get(k, {}) if isinstance(sections.get(k), dict) else {}).get("score", 0) * w
             for k, w in weights.items()
         )
         overall = max(0, min(100, round(weighted)))
         score_result["overall_score"] = overall
-        # Recalculate grade based on actual score
+        # Recalculate the grade from the actual computed score
         score_result["grade"] = (
             "A+" if overall >= 90 else "A"  if overall >= 75 else
             "B"  if overall >= 60 else "C"  if overall >= 45 else
             "D"  if overall >= 30 else "F"
         )
     except Exception as e:
-        errors.append(f"ai_score error: {e}")
+        # Log the full exception so errors are visible in the server logs.
+        import traceback
+        logging.error(
+            f"[agent] compute_ai_score failed after retry: {type(e).__name__}: {e}\n"
+            f"{traceback.format_exc()}"
+        )
+        errors.append(f"ai_score error: {type(e).__name__}: {e}")
         _lang = state.get("ui_lang", "EN").upper()
         score_result = {
             "overall_score": 0,
@@ -306,11 +302,8 @@ async def _node_compute_ai_score(state: AgentState) -> AgentState:
     return {**state, "ai_score_result": score_result, "errors": errors}
 
 
-# ─────────────────────────────────────────────────────────────
-#  NŒUD 3 : run_gap_analysis
-#  Analyse les écarts entre l'utilisateur et la cible.
-#  Ce nœud est CONDITIONNEL — skippé si pas de profil cible.
-# ─────────────────────────────────────────────────────────────
+# Node 3: run_gap_analysis
+# Compares the user profile against the target. Skipped if no target is provided.
 
 def _gap_system(lang: str = "EN") -> str:
     if lang.upper() == "FR":
@@ -350,12 +343,12 @@ Expected format:
 ABSOLUTE RULE: never invent facts not present in the provided data."""
 
 async def _node_run_gap_analysis(state: AgentState) -> AgentState:
-    """Lance l'analyse de gap si un profil cible est présent."""
+    """Run the gap analysis if a target profile was provided."""
     target = state.get("target_profile")
     errors = list(state.get("errors") or [])
 
     if not target:
-        # Pas de cible → on passe
+        # No target provided, skip this node
         return {**state, "gap_result": None}
 
     user = state.get("normalized_profile") or state.get("user_profile") or {}
@@ -401,10 +394,8 @@ async def _node_run_gap_analysis(state: AgentState) -> AgentState:
     return {**state, "gap_result": gap_result, "errors": errors}
 
 
-# ─────────────────────────────────────────────────────────────
-#  NŒUD 4 : generate_recommendations
-#  Synthèse finale — priorise les actions selon le score + les gaps.
-# ─────────────────────────────────────────────────────────────
+# Node 4: generate_recommendations
+# Builds the final action plan based on the score and gap results
 
 def _reco_system(lang: str = "EN") -> str:
     if lang.upper() == "FR":
@@ -448,14 +439,14 @@ Return ONLY valid JSON:
 Generate 3 to 5 priority_actions maximum. Be precise and actionable."""
 
 async def _node_generate_recommendations(state: AgentState) -> AgentState:
-    """Synthèse finale basée sur le score IA et le gap (si disponible)."""
+    """Generate the final recommendations from the score and gap analysis."""
     errors = list(state.get("errors") or [])
     score  = state.get("ai_score_result") or {}
     if not isinstance(score, dict): score = {}
     gap    = state.get("gap_result")
     if not isinstance(gap, dict): gap = None
 
-    # Construit le contexte pour le LLM
+    # Build the context block that gets sent to the LLM
     context = (
         f"## Score profil\n"
         f"Score global : {score.get('overall_score', 0)}/100 ({score.get('grade','?')})\n"
@@ -476,9 +467,13 @@ async def _node_generate_recommendations(state: AgentState) -> AgentState:
         )
 
     try:
-        raw = await _call_azure(_reco_system(state.get("ui_lang", "EN")), context, temperature=0.5, max_tokens=900)
-        recommendations = json.loads(raw)
+        raw = await _call_azure(_reco_system(state.get("ui_lang", "EN")), context, temperature=0.5, max_tokens=1500)
+        import re as _re
+        _clean = _re.sub(r"```json|```", "", raw).strip()
+        _clean = _clean[_clean.find("{"):]
+        recommendations = json.loads(_clean)
     except Exception as e:
+        logging.error(f"[agent] recommendations JSON parse failed: {e}\nRaw output was: {raw[:500] if 'raw' in dir() else 'no response'}")
         errors.append(f"recommendations error: {e}")
         _lang = state.get("ui_lang", "EN").upper()
         recommendations = {
@@ -492,12 +487,9 @@ async def _node_generate_recommendations(state: AgentState) -> AgentState:
     return {**state, "recommendations": recommendations, "errors": errors}
 
 
-# ─────────────────────────────────────────────────────────────
-#  NŒUD 2b : deep_diagnostic
-#  Déclenché uniquement si score < 35.
-#  Produit un diagnostic détaillé des blocages fondamentaux
-#  du profil avant de passer aux recommandations.
-# ─────────────────────────────────────────────────────────────
+# Node 2b: deep_diagnostic
+# Only runs when the profile score is below 35.
+# Identifies the main reasons the profile is weak before generating recommendations.
 
 def _diag_system(lang: str = "EN") -> str:
     if lang.upper() == "FR":
@@ -531,11 +523,7 @@ Identify the fundamental blockers and return ONLY valid JSON:
 }"""
 
 async def _node_deep_diagnostic(state: AgentState) -> AgentState:
-    """
-    Nœud déclenché quand score < 35.
-    Analyse en profondeur pourquoi le profil est si faible
-    et injecte le diagnostic dans l'état pour enrichir les recommandations.
-    """
+    """Run a deeper analysis when the score is very low (under 35). Injects the result into the state so recommendations can use it."""
     profile = state.get("normalized_profile") or state.get("user_profile") or {}
     if not isinstance(profile, dict): profile = {}
     errors  = list(state.get("errors") or [])
@@ -569,35 +557,26 @@ async def _node_deep_diagnostic(state: AgentState) -> AgentState:
             "honest_assessment": "Le profil nécessite un travail de fond avant toute optimisation.",
         }
 
-    # Injecte le diagnostic dans ai_score_result pour que
-    # generate_recommendations puisse l'utiliser
+    # Attach the diagnostic to the score result so generate_recommendations can reference it
     enriched_score = {**(state.get("ai_score_result") or {}), "deep_diagnostic": diagnostic}
     return {**state, "ai_score_result": enriched_score, "errors": errors}
 
 
 
-# ─────────────────────────────────────────────────────────────
-#  ROUTEUR LEVEL 1 — Score-based smart routing
-#
-#  Logique de décision après compute_ai_score :
-#
-#  score < 35  →  deep_diagnostic  (profil trop faible, besoin d'analyse fondamentale)
-#  target fourni →  run_gap_analysis  (comparaison avec profil cible)
-#  score ≥ 70  →  generate_recommendations  directement (profil fort, pas besoin de gap)
-#  sinon (35-69, pas de target) →  generate_recommendations
-# ─────────────────────────────────────────────────────────────
+# Router: decides which node to run after compute_ai_score
+# score < 35 -> deep_diagnostic
+# target provided -> run_gap_analysis
+# otherwise -> generate_recommendations directly
 
 def _smart_router(state: AgentState) -> Literal[
     "deep_diagnostic", "run_gap_analysis", "generate_recommendations"
 ]:
     """
-    Routeur intelligent Level 1 + Level 2.
+    Route to the next node based on the profile score and whether a target was provided.
 
-    Décisions :
-      score < 35              → deep_diagnostic → recommendations
-      target fourni           → run_gap_analysis → recommendations
-      score ≥ 35, pas target  → recommendations (direct)
-
+    score < 35              -> deep_diagnostic
+    target provided         -> run_gap_analysis
+    score >= 35, no target  -> generate_recommendations
     """
     _score_raw = state.get("ai_score_result") or {}
     if not isinstance(_score_raw, dict): _score_raw = {}
@@ -609,12 +588,12 @@ def _smart_router(state: AgentState) -> Literal[
         (target.get("headline") or target.get("name") or target.get("experience"))
     )
 
-    # Priorité 1 : profil trop faible → diagnostic approfondi d'abord
+    # If the score is very low, run deep diagnostic first
     if score < 35:
         logging.info(f"[agent] Router → deep_diagnostic (score={score})")
         return "deep_diagnostic"
 
-    # Priorité 2 : profil cible fourni → gap analysis
+    # If a target profile was provided, run gap analysis
     if has_target:
         logging.info(f"[agent] Router → run_gap_analysis (score={score}, target=True)")
         return "run_gap_analysis"
@@ -623,26 +602,24 @@ def _smart_router(state: AgentState) -> Literal[
     return "generate_recommendations"
 
 
-# ─────────────────────────────────────────────────────────────
-#  CONSTRUCTION DU GRAPH  (Level 1)
-# ─────────────────────────────────────────────────────────────
+# Build the LangGraph state graph
 
 def _build_graph() -> StateGraph:
-    """Construit et compile le graph LangGraph avec routing Level 1 + Level 2 (tool use)."""
+    """Build and compile the LangGraph graph with all nodes and routing."""
     builder = StateGraph(AgentState)
 
-    # ── Nœuds ────────────────────────────────────────────────
+    # Register nodes
     builder.add_node("extract_profile",          _node_extract_profile)
     builder.add_node("compute_ai_score",          _node_compute_ai_score)
     builder.add_node("deep_diagnostic",           _node_deep_diagnostic)
     builder.add_node("run_gap_analysis",          _node_run_gap_analysis)
     builder.add_node("generate_recommendations",  _node_generate_recommendations)
 
-    # ── Arêtes fixes ─────────────────────────────────────────
+    # Fixed edges
     builder.add_edge(START,             "extract_profile")
     builder.add_edge("extract_profile", "compute_ai_score")
 
-    # ── Routeur Level 1 (score-based) ────────────────────────
+    # Conditional routing after compute_ai_score
     builder.add_conditional_edges(
         "compute_ai_score",
         _smart_router,
@@ -660,13 +637,11 @@ def _build_graph() -> StateGraph:
     return builder.compile()
 
 
-# Instance compilée (singleton)
+# Compiled graph instance (created once at import time)
 _graph = _build_graph()
 
 
-# ─────────────────────────────────────────────────────────────
-#  POINT D'ENTRÉE PUBLIC
-# ─────────────────────────────────────────────────────────────
+# Public entry point
 
 async def run_full_analysis(
     user_profile:   dict,
@@ -677,19 +652,15 @@ async def run_full_analysis(
     previous_score: Optional[dict] = None,   # chargé depuis Cosmos par main.py
 ) -> dict:
     """
-    Lance le workflow agentique complet (Level 1 + Level 2) et retourne le résultat.
+    Run the full analysis workflow and return the results.
 
-    Level 1 — Smart routing basé sur le score
-
-    Retour
-    ------
-    dict avec les clés :
-        - ai_score         : scoring IA du profil
-        - gap_analysis     : gap vs cible (None si pas de cible)
-        - deep_diagnostic  : diagnostic approfondi (None si score ≥ 35)
-        - recommendations  : synthèse finale avec priority_actions
-        - errors           : erreurs non-bloquantes
-        - workflow_path    : nœuds traversés dans l'ordre
+    Returns a dict with:
+        - ai_score        : profile score from the LLM
+        - gap_analysis    : gap vs target (None if no target was provided)
+        - deep_diagnostic : detailed diagnosis (None if score >= 35)
+        - recommendations : final action plan
+        - errors          : non-fatal errors collected during the run
+        - workflow_path   : list of nodes that were executed
     """
     initial_state: AgentState = {
         "user_profile":   user_profile,
@@ -727,7 +698,7 @@ async def run_full_analysis(
 
 
 def _get_workflow_path(state: AgentState) -> list[str]:
-    """Retourne la liste des nœuds effectivement traversés."""
+    """Return the list of nodes that were actually executed in this run."""
     path = ["extract_profile", "compute_ai_score"]
     _sr = state.get("ai_score_result") or {}
     score = (_sr.get("overall_score", 50) if isinstance(_sr, dict) else 50)
@@ -739,11 +710,7 @@ def _get_workflow_path(state: AgentState) -> list[str]:
     return path
 
 
-# ─────────────────────────────────────────────────────────────
-#  SNIPPET D'INTÉGRATION DANS main.py
-# ─────────────────────────────────────────────────────────────
-#
-#  Ajouter ces lignes dans main.py (sans toucher aux routes existantes) :
+# Integration snippet for main.py
 #
 #  from agent import run_full_analysis
 #

@@ -46,19 +46,19 @@ function showToast(msg, type) {
   setTimeout(() => { t.className = 'toast'; }, 3000);
 }
 
-// ── Email Notification Preferences ───────────────────────────────────────────
+// Email notification preferences
 
 const emailEnabled  = document.getElementById('emailEnabled');
 const eventsSection = document.getElementById('emailEventsSection');
 const saveNotifBtn  = document.getElementById('saveNotifBtn');
 const notifStatus   = document.getElementById('notifStatus');
 
-// Show/hide event checkboxes based on master toggle
+// Toggle visibility of event checkboxes based on the master switch
 emailEnabled.addEventListener('change', () => {
   eventsSection.style.display = emailEnabled.checked ? 'block' : 'none';
 });
 
-// Load saved prefs from backend on open
+// Load preferences from the backend when the options page opens
 (async () => {
   const { serverUrl, authToken } = await chrome.storage.sync.get(['serverUrl', 'authToken']);
   if (!serverUrl || !authToken) return;
@@ -80,12 +80,12 @@ emailEnabled.addEventListener('change', () => {
   } catch (_) { /* backend may not be running */ }
 })();
 
-// ── Self-service data deletion (GDPR) ────────────────────────────────────────
+// Data deletion (GDPR)
 
 const deleteConfirm = document.getElementById('deleteConfirm');
 const deleteDataBtn = document.getElementById('deleteDataBtn');
 
-// Arm the button only when the user types the exact confirmation word.
+// Only enable the delete button after the user types the confirmation word
 deleteConfirm.addEventListener('input', () => {
   deleteDataBtn.disabled = deleteConfirm.value.trim() !== 'DELETE';
 });
@@ -109,7 +109,7 @@ deleteDataBtn.addEventListener('click', async () => {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    // Account is gone — wipe all local auth/session state and sign out.
+    // Account deleted - clear local state and sign out
     await chrome.storage.sync.remove(['authToken', 'notifEmail', 'notifEvents']);
     await chrome.storage.local.clear();
 
@@ -124,7 +124,7 @@ deleteDataBtn.addEventListener('click', async () => {
   }
 });
 
-// Save prefs to backend
+// Save notification preferences to the backend
 saveNotifBtn.addEventListener('click', async () => {
   const { serverUrl, authToken } = await chrome.storage.sync.get(['serverUrl', 'authToken']);
   if (!serverUrl || !authToken) {
@@ -147,7 +147,7 @@ saveNotifBtn.addEventListener('click', async () => {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    // Also save to chrome.storage.sync so background.js can read it instantly
+    // Also store in chrome.storage.sync so background.js can read it right away
     await chrome.storage.sync.set({
       notifEmail: emailEnabled.checked,
       notifEvents: events,

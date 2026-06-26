@@ -1,26 +1,18 @@
 """
-rag_service.py — Retrieval-Augmented Generation over a user's own history.
+rag_service.py - Retrieval for the chat assistant.
 
-Gives the AI Assistant memory: before answering, the chat route calls
-retrieve_context() to pull the most relevant past activity (gap analyses, AI
-scores, networking scans, chats, profile snapshots) from the user's own
-embedding_index, and injects it into the prompt.
+Before the assistant answers a question, retrieve_context() looks up the
+user's past activity (gap analyses, scores, network scans, chat history,
+profile snapshots) and injects the most relevant items into the prompt.
 
-How it works (no separate vector database)
--------------------------------------------
-Every embeddable document is mirrored at write time into an `embedding_index`
-Cosmos doc holding a 768-dim sentence-embedding vector (see cosmos_db.py).  At
-query time we:
+How it works:
+  1. Embed the user's question.
+  2. Load all stored embedding docs for that user.
+  3. Compute cosine similarity in Python and filter below the threshold.
+  4. Return the top matches sorted by relevance.
 
-    1. embed the user's question with the SAME model,
-    2. pull all of that user's embedding docs (typically <300),
-    3. compute cosine similarity in Python (brute force, <100ms),
-    4. filter below a relevance threshold, sort, return the top matches.
-
-Cosine == dot product here because embedding_service.encode() L2-normalises
-every vector, so no per-query normalisation maths is needed.
-
-Reuses Enhancement 1's embedding model — zero extra cost, zero extra infra.
+This uses the same embedding model as connection_scorer so there is no
+extra infrastructure or cost.
 """
 
 from __future__ import annotations
@@ -33,7 +25,7 @@ import embedding_service
 
 logger = logging.getLogger(__name__)
 
-# Human-readable labels for each source type, used when formatting the prompt block.
+# Labels shown in the context block sent to the LLM
 _SOURCE_LABELS = {
     "gap_analysis_record":        "Gap analysis",
     "ai_score_record":            "AI profile score",
@@ -49,26 +41,11 @@ async def retrieve_context(
     max_results: int = 5,
     min_similarity: float = 0.4,
 ) -> list[dict]:
-    """Return the user's most relevant past activity for *query*.
+    """Return the most relevant past activity for a given query.
 
-    Args:
-        user_id:        the user whose history to search.
-        query:          the current question / message to find context for.
-        max_results:    cap on how many items to return (typically 3-5).
-        min_similarity: drop matches below this cosine score (typically 0.4 —
-                        below this, results are too unrelated to be useful).
-
-    Returns a list (highest similarity first) of dicts:
-        {
-            "similarity":   float,
-            "source_type":  str,
-            "source_id":    str,
-            "text_preview": str,
-            "metadata":     dict,
-            "created_at":   str (ISO),
-        }
-    Returns [] if the model is unavailable, the user has no history, or nothing
-    clears the threshold.  Never raises — retrieval failure must not break chat.
+    Returns a list sorted by similarity (highest first). Returns an empty list
+    if the model is unavailable, the user has no history, or nothing passes
+    the similarity threshold. Never raises - retrieval errors must not break chat.
     """
     if not query or not query.strip():
         return []
@@ -94,8 +71,7 @@ async def retrieve_context(
                 continue
             v = np.asarray(vec, dtype="float32")
             if v.shape != q.shape:
-                # Dimension mismatch (e.g. an old 384-dim vector after a model
-                # change) — skip rather than crash.
+                # Skip vectors with wrong dimensions (e.g. stored before a model change)
                 continue
             sim = float(np.dot(q, v))  # both unit-normalised → cosine similarity
             if sim >= min_similarity:
@@ -121,10 +97,8 @@ async def retrieve_context(
 
 
 def format_context_block(items: list[dict]) -> str:
-    """Render retrieved items into a prompt-ready block, or "" if none.
-
-    The block is clearly demarcated so the LLM can distinguish the user's past
-    activity from the current question.
+    """Format retrieved items as a text block to include in the LLM prompt.
+    Returns an empty string if there are no items.
     """
     if not items:
         return ""

@@ -17,7 +17,7 @@ from typing import Optional, List
 
 from dotenv import load_dotenv
 
-# Load .env BEFORE any local module imports so env vars are available
+# Load environment variables before importing local modules
 load_dotenv(override=True)
 
 from fastapi import FastAPI, HTTPException, Depends, Request
@@ -37,11 +37,9 @@ from auth import (
 
 app = FastAPI(title="LinkedIn AI Agent API")
 
-# ── Persistent HTTP clients (reuse TCP connections + TLS sessions across requests) ──
-# Creating a new AsyncClient per request costs ~150-300 ms for TLS handshake each time.
+# Reuse HTTP clients across requests to avoid creating a new TLS connection each time
 _azure_client = httpx.AsyncClient(
-    # read=180s: Azure OpenAI can take 30-90s for large JSON responses (gap analysis,
-    # interview prep). 60s was triggering ReadTimeout mid-stream. connect=15s for slow DNS.
+    # 180s read timeout because Azure OpenAI can be slow on large responses
     timeout=httpx.Timeout(180.0, connect=15.0),
     limits=httpx.Limits(max_keepalive_connections=10, max_connections=20, keepalive_expiry=30),
     http2=False,  # Azure OpenAI doesn't reliably support HTTP/2
@@ -54,9 +52,7 @@ _outbound_client = httpx.AsyncClient(
 
 @app.on_event("startup")
 async def _prewarm_azure_connection():
-    """Open a TCP+TLS connection to Azure OpenAI on startup so the first user
-    request doesn't pay the ~300-500 ms handshake cost. Best-effort — failures
-    are silent (the request will simply pay handshake on first call)."""
+    """Warm up the Azure OpenAI connection at startup to reduce first-request latency."""
     if not AZURE_ENDPOINT:
         return
     try:
@@ -72,9 +68,7 @@ async def _close_http_clients():
     await _outbound_client.aclose()
 
 
-# ══════════════════════════════════════
-#  RATE LIMITING (in-memory, per-IP)
-# ══════════════════════════════════════
+# In-memory per-IP rate limiting
 
 RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "60"))   # max per window
 RATE_LIMIT_WINDOW   = int(os.getenv("RATE_LIMIT_WINDOW", "60"))     # window in seconds
@@ -82,7 +76,7 @@ _rate_buckets: dict = defaultdict(list)
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
-    # Skip rate limiting for health checks, docs, and CORS preflight requests
+    # Skip rate limiting for health checks and preflight requests
     path = request.url.path
     if path in ("/health", "/docs", "/openapi.json", "/redoc"):
         return await call_next(request)
@@ -93,7 +87,7 @@ async def rate_limit_middleware(request: Request, call_next):
     now = time()
     window_start = now - RATE_LIMIT_WINDOW
 
-    # Clean old entries and check count
+    # Remove expired entries and check the count
     bucket = _rate_buckets[client_ip]
     _rate_buckets[client_ip] = [t for t in bucket if t > window_start]
     bucket = _rate_buckets[client_ip]
@@ -108,12 +102,9 @@ async def rate_limit_middleware(request: Request, call_next):
     bucket.append(now)
     return await call_next(request)
 
-# CORS: allow Chrome extension, admin dashboard, and local development
-# NOTE: browsers do NOT support wildcard "chrome-extension://*" — the exact extension
-# ID must be listed. Add extra IDs (comma-separated) via the CORS_ORIGINS env var.
-# CORS — Chrome extensions send their ID as the Origin header.
-# When loaded unpacked the ID changes each reload, so we accept ALL chrome-extension://*
-# origins in development. For production set EXTENSION_ID in .env.
+# CORS setup: allow the Chrome extension, admin dashboard, and local dev
+# In development the extension ID changes each reload, so we allow all chrome-extension:// origins.
+# For production, set EXTENSION_ID in .env to allow only the deployed extension.
 _EXTENSION_ID = os.getenv("EXTENSION_ID", "")
 _raw_cors_origins = os.getenv("CORS_ORIGINS", "")
 _extra_origins = [o.strip() for o in _raw_cors_origins.split(",") if o.strip()]
@@ -128,8 +119,7 @@ if _EXTENSION_ID:
     CORS_ORIGINS_BASE.append(f"chrome-extension://{_EXTENSION_ID}")
 CORS_ORIGINS = CORS_ORIGINS_BASE + _extra_origins
 
-# allow_origin_regex catches ALL chrome-extension://* origins without needing the exact ID.
-# This is safe because the backend only responds to authenticated requests anyway.
+# Regex catches all chrome-extension:// origins without needing the exact ID
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -154,9 +144,7 @@ def _cors_headers_for(origin: str) -> dict:
 
 @app.exception_handler(HTTPException)
 async def cors_aware_http_exception_handler(request: Request, exc: HTTPException):
-    """Ensure CORS headers are present on all error responses (e.g. 403, 401, 429).
-    Without this, the browser blocks the error response and the extension sees
-    a network failure instead of the real error message."""
+    """Add CORS headers to error responses so the extension can read the error message."""
     origin = request.headers.get("origin", "")
     return JSONResponse(
         status_code=exc.status_code,
@@ -166,7 +154,7 @@ async def cors_aware_http_exception_handler(request: Request, exc: HTTPException
 
 @app.exception_handler(Exception)
 async def cors_aware_server_error_handler(request: Request, exc: Exception):
-    """Apply same CORS treatment to unhandled 500 errors."""
+    """Add CORS headers to unhandled 500 errors."""
     origin = request.headers.get("origin", "")
     return JSONResponse(
         status_code=500,
@@ -181,17 +169,7 @@ AZURE_API_VERSION  = os.getenv("AZURE_API_VERSION", "2024-12-01-preview")
 POST_DEPLOYMENT    = os.getenv("POST_DEPLOYMENT", "gpt-4o-mini-2024-07-18-postagent")
 PROFILE_DEPLOYMENT = os.getenv("PROFILE_DEPLOYMENT", "gpt-4o-mini-2024-07-18")
 
-# ── Email configuration (set these in your .env file) ──────────────────────────
-#
-#  For Gmail:
-#    EMAIL_HOST     = smtp.gmail.com
-#    EMAIL_PORT     = 587
-#    EMAIL_USER     = your@gmail.com
-#    EMAIL_PASSWORD = your-app-password   (generate at myaccount.google.com/apppasswords)
-#    EMAIL_FROM     = Subul IN <your@gmail.com>
-#
-#  For any other SMTP provider, set accordingly.
-# ────────────────────────────────────────────────────────────────────────────────
+# Email config from .env (SMTP, works with Gmail or any provider)
 EMAIL_HOST     = os.getenv("EMAIL_HOST", "smtp.gmail.com")
 EMAIL_PORT     = int(os.getenv("EMAIL_PORT", "587"))
 EMAIL_USER     = os.getenv("EMAIL_USER", "")
@@ -220,7 +198,7 @@ def _resolve_smtp_host(user_email: str, configured_host: str) -> tuple[str, int]
     """
     domain = user_email.split("@")[-1].lower() if "@" in user_email else ""
 
-    # Trust AWS SES and any non-Gmail host directly — never probe/override them
+    # Non-Gmail hosts are used directly without probing
     aws_ses = "amazonaws.com" in configured_host
     is_gmail_mismatch = (
         configured_host == "smtp.gmail.com"
@@ -230,7 +208,7 @@ def _resolve_smtp_host(user_email: str, configured_host: str) -> tuple[str, int]
     if aws_ses or not is_gmail_mismatch:
         return configured_host, EMAIL_PORT
 
-    # Gmail can't auth non-Gmail senders — probe the domain's own mail servers
+    # For Gmail, check if the sender domain has its own mail server
     print(f"[EMAIL] smtp.gmail.com won't auth {user_email} — probing {domain} mail servers")
     candidates = [f"smtp.{domain}", f"mail.{domain}", domain]
     for host in candidates:
@@ -250,8 +228,7 @@ def _send_email_sync(to: str, subject: str, html_body: str, text_body: str = "")
 
     host, port = _resolve_smtp_host(EMAIL_USER, EMAIL_HOST)
 
-    # Extract the bare email address from EMAIL_FROM (e.g. "Subul Platform <subul@smartovate.com>" -> "subul@smartovate.com")
-    # AWS SES requires the MAIL FROM to be a valid email address, not the SMTP username/access key.
+    # Extract just the email address from the display name format
     import re as _re
     _from_header = EMAIL_FROM or EMAIL_USER
     _match = _re.search(r"<([^>]+)>", _from_header)
@@ -315,12 +292,33 @@ def _build_gap_analysis_email_html(result: dict, user_name: str, target_name: st
     Build a rich HTML email + plain-text summary for a completed gap analysis.
     Returns (html_body_for_template, plain_text).
     """
-    score        = result.get("overall_gap_score", 0)
-    label        = result.get("score_label", "")
-    verdict      = result.get("verdict", "")
-    key_insight  = result.get("key_insight", "")
+    def _gae_as_int(v, default=0):
+        if isinstance(v, bool):
+            return default
+        if isinstance(v, (int, float)):
+            return int(v)
+        if isinstance(v, str):
+            try:
+                return int(float(v.strip()))
+            except (ValueError, TypeError):
+                return default
+        return default
 
-    # Score badge colour
+    def _gae_as_str(v, default=""):
+        if v is None:
+            return default
+        if isinstance(v, str):
+            return v
+        if isinstance(v, (int, float, bool)):
+            return str(v)
+        return default
+
+    score        = _gae_as_int(result.get("overall_gap_score", 0))
+    label        = _gae_as_str(result.get("score_label", ""))
+    verdict      = _gae_as_str(result.get("verdict", ""))
+    key_insight  = _gae_as_str(result.get("key_insight", ""))
+
+    # Set badge color based on score
     if score >= 70:
         badge_bg, badge_fg = "#057642", "#e6f4ed"
     elif score >= 45:
@@ -328,12 +326,16 @@ def _build_gap_analysis_email_html(result: dict, user_name: str, target_name: st
     else:
         badge_bg, badge_fg = "#cc1016", "#fce8e6"
 
-    # Quick wins (top 3)
+    # Include top 3 quick wins
     quick_wins_html = ""
-    for qw in (result.get("quick_wins") or [])[:3]:
+    raw_quick_wins = result.get("quick_wins")
+    quick_wins_list = raw_quick_wins if isinstance(raw_quick_wins, list) else []
+    for qw in quick_wins_list[:3]:
+        if not isinstance(qw, dict):
+            continue
         action     = qw.get("action", "")
-        impact     = qw.get("impact", "medium").capitalize()
-        difficulty = qw.get("difficulty", "medium").capitalize()
+        impact     = str(qw.get("impact", "medium") or "medium").capitalize()
+        difficulty = str(qw.get("difficulty", "medium") or "medium").capitalize()
         impact_color = {"High": "#057642", "Medium": "#D4830A", "Low": "#888"}.get(impact, "#888")
         quick_wins_html += f"""
         <tr>
@@ -346,8 +348,10 @@ def _build_gap_analysis_email_html(result: dict, user_name: str, target_name: st
           </td>
         </tr>"""
 
-    # Section scores comparison table
+    # Build the section scores table
     sections = result.get("sections", {})
+    if not isinstance(sections, dict):
+        sections = {}
     section_rows_html = ""
     section_labels = {
         "headline":   "Headline",
@@ -359,8 +363,10 @@ def _build_gap_analysis_email_html(result: dict, user_name: str, target_name: st
     }
     for key, label_name in section_labels.items():
         sec = sections.get(key, {})
-        u_score = sec.get("user_score", 0)
-        t_score = sec.get("target_score", 0)
+        if not isinstance(sec, dict):
+            sec = {}
+        u_score = _gae_as_int(sec.get("user_score", 0))
+        t_score = _gae_as_int(sec.get("target_score", 0))
         u_color = "#057642" if u_score >= 70 else "#D4830A" if u_score >= 45 else "#cc1016"
         t_color = "#057642" if t_score >= 70 else "#D4830A" if t_score >= 45 else "#cc1016"
         section_rows_html += f"""
@@ -370,8 +376,10 @@ def _build_gap_analysis_email_html(result: dict, user_name: str, target_name: st
           <td style="padding:9px 14px;font-size:13px;font-weight:700;color:{t_color};text-align:center;border-bottom:1px solid #f5f5f5;">{t_score}</td>
         </tr>"""
 
-    # Missing skills (top 5)
-    missing_skills = (sections.get("skills", {}).get("missing") or [])[:5]
+    # List top 5 missing skills
+    _skills_sec = sections.get("skills", {})
+    raw_missing = _skills_sec.get("missing") if isinstance(_skills_sec, dict) else None
+    missing_skills = (raw_missing if isinstance(raw_missing, list) else [])[:5]
     missing_skills_html = ""
     if missing_skills:
         pills = "".join(
@@ -388,9 +396,13 @@ def _build_gap_analysis_email_html(result: dict, user_name: str, target_name: st
           </td>
         </tr>"""
 
-    # 90-day roadmap (first 2 entries)
+    # Include first two steps of the 30-day plan
     roadmap_html = ""
-    for step in (result.get("90_day_roadmap") or [])[:2]:
+    raw_roadmap = result.get("30_day_roadmap")
+    roadmap_list = raw_roadmap if isinstance(raw_roadmap, list) else []
+    for step in roadmap_list[:2]:
+        if not isinstance(step, dict):
+            continue
         week   = step.get("week", "")
         action = step.get("action", "")
         result_text = step.get("expected_result", "")
@@ -464,9 +476,9 @@ def _build_gap_analysis_email_html(result: dict, user_name: str, target_name: st
       </tr>
     </table>'''}
 
-    <!-- 90-Day Roadmap -->
+    <!-- 30-Day Roadmap -->
     {"" if not roadmap_html else f'''
-    <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#1a1a2e;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1a1a2e" stroke-width="2.5" style="vertical-align:-2px;margin-right:5px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Your 90-Day Roadmap (first steps)</p>
+    <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#1a1a2e;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1a1a2e" stroke-width="2.5" style="vertical-align:-2px;margin-right:5px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Your 30-Day Roadmap (first steps)</p>
     <table width="100%" cellpadding="0" cellspacing="0"
            style="border:1px solid #e8e8ec;border-radius:8px;overflow:hidden;margin-bottom:24px;">
       {roadmap_html}
@@ -490,7 +502,7 @@ def _build_gap_analysis_email_html(result: dict, user_name: str, target_name: st
         f"Verdict: {verdict}\n\n"
         f"Key Insight: {key_insight}\n\n"
         f"Quick Wins:\n" +
-        "\n".join(f"  • {qw.get('action','')}" for qw in (result.get("quick_wins") or [])[:3]) +
+        "\n".join(f"  • {qw.get('action','')}" for qw in quick_wins_list[:3] if isinstance(qw, dict)) +
         f"\n\nOpen Subul IN to view the full analysis."
     )
 
@@ -526,8 +538,32 @@ async def _maybe_send_gap_analysis_email(
         to_email = user["email"]
         target_display = target_name or "your target"
         score = result.get("overall_gap_score", 0)
+        label = result.get("score_label", "")
 
-        body_html, plain_text = _build_gap_analysis_email_html(result, user_name, target_name)
+        try:
+            body_html, plain_text = _build_gap_analysis_email_html(result, user_name, target_name)
+        except Exception as build_err:
+            # Never let a formatting/type quirk in the AI's result block the email
+            # entirely — fall back to a minimal but guaranteed-to-work version.
+            logging.warning(f"[gap_analysis_email] rich HTML build failed, using fallback: {build_err}")
+            plain_text = (
+                f"Gap Analysis Complete — vs. {target_display}\n\n"
+                f"Overall Score: {score}/100 ({label})\n\n"
+                f"Open the Subul IN extension to view your full analysis."
+            )
+            body_html = f"""
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr><td style="text-align:center;padding:24px;">
+                <div style="font-size:40px;font-weight:900;color:#6941c6;">{score}</div>
+                <div style="font-size:14px;font-weight:700;color:#333;margin-top:4px;">{label}</div>
+                <p style="margin:16px 0 0;font-size:13px;color:#666;">vs. {target_display}</p>
+                <p style="margin:16px 0 0;font-size:13px;color:#666;">
+                  Open the Subul IN extension to view your full analysis, headline rewrite, and connection strategy.
+                </p>
+              </td></tr>
+            </table>
+            """
+
         full_html = _build_email_html(
             title=f"Gap Analysis: {score}/100 vs {target_display}",
             body_html=body_html,
@@ -644,10 +680,38 @@ async def _maybe_send_ai_score_email(user_doc_id: str, result: dict, user_name: 
         if not user or not user.get("email"):
             return
         to_email = user["email"]
-        overall = result.get("overall_score", 0)
-        grade   = result.get("grade", "")
-        verdict = result.get("verdict", result.get("summary", ""))
+
+        # Coerce every field defensively -- the LLM / agent payload shape can
+        # vary (e.g. a "tip"/"verdict" key landing as an int instead of a
+        # string), which previously crashed this fire-and-forget task with
+        # "'int' object is not subscriptable" and silently dropped the email.
+        def _as_int(v, default=0):
+            if isinstance(v, bool):
+                return default
+            if isinstance(v, (int, float)):
+                return int(v)
+            if isinstance(v, str):
+                try:
+                    return int(float(v.strip()))
+                except (ValueError, TypeError):
+                    return default
+            return default
+
+        def _as_str(v, default=""):
+            if v is None:
+                return default
+            if isinstance(v, str):
+                return v
+            if isinstance(v, (int, float, bool)):
+                return str(v)
+            return default
+
+        overall = _as_int(result.get("overall_score", 0))
+        grade   = _as_str(result.get("grade", ""))
+        verdict = _as_str(result.get("verdict") if result.get("verdict") not in (None, "") else result.get("summary", ""))
         sections = result.get("sections", {})
+        if not isinstance(sections, dict):
+            sections = {}
 
         # Build section rows
         section_labels = {"headline": "Headline", "about": "About", "experience": "Experience",
@@ -655,9 +719,10 @@ async def _maybe_send_ai_score_email(user_doc_id: str, result: dict, user_name: 
         rows_html = ""
         for k, lbl in section_labels.items():
             s = sections.get(k, {}) if isinstance(sections.get(k), dict) else {}
-            sc = s.get("score", 0)
+            sc = _as_int(s.get("score", 0))
             color = "#057642" if sc >= 70 else "#D4830A" if sc >= 45 else "#cc1016"
-            tip   = s.get("tip", s.get("feedback", ""))[:120] if s.get("tip", s.get("feedback","")) else ""
+            tip_raw = s.get("tip", s.get("feedback", ""))
+            tip = _as_str(tip_raw)[:120]
             rows_html += f"""
         <tr>
           <td style="padding:9px 14px;font-size:13px;color:#555;border-bottom:1px solid #f5f5f5;">{lbl}</td>
@@ -766,9 +831,7 @@ def _build_email_html(title: str, body_html: str) -> str:
 </html>"""
 
 
-# ══════════════════════════════════════
-#  STARTUP / SHUTDOWN
-# ══════════════════════════════════════
+# App startup and shutdown
 
 @app.on_event("startup")
 async def startup():
@@ -781,9 +844,7 @@ async def startup():
     else:
         print("[WARN] Cosmos DB not configured - set credentials in .env")
 
-    # Pre-load the multilingual embedding model so it is ready before the
-    # first user request (avoids a 3-second cold-start on request #1).
-    # The model is downloaded on first run and cached locally thereafter.
+    # Load the embedding model at startup to avoid a slow first request
     try:
         import embedding_service
         embedding_service.load()
@@ -800,9 +861,7 @@ async def shutdown():
     await cosmos_db.close_cosmos()
 
 
-# ══════════════════════════════════════
-#  SYSTEM PROMPTS
-# ══════════════════════════════════════
+# System prompts for the LLM
 
 SYSTEM_PROMPTS = {
     "post": """Tu es un ghostwriter LinkedIn de classe mondiale.
@@ -850,6 +909,9 @@ Tu recois les donnees ACTUELLES du profil utilisateur scrapees depuis LinkedIn.
 Genere du contenu PERSONNALISE et AMELIORE base sur ces donnees.
 Retourne UNIQUEMENT un JSON valide avec les champs demandes.
 
+## REGLE ABSOLUE — LANGUE
+La requete utilisateur precise une langue de sortie (FR, EN, AR, ES, DE...). TOUS les champs generes, y compris HEADLINE, DOIVENT etre dans cette langue, sans exception et sans aucun mot dans une autre langue. Ignore toute habitude ou exemple ci-dessous qui semble suggerer une autre langue : adapte-le toujours a la langue demandee.
+
 ## REGLE ABSOLUE — DIFFERENCIATION OBLIGATOIRE
 Le contenu genere DOIT etre different et meilleur que l'original.
 INTERDIT de copier ou paraphraser le contenu existant mot pour mot.
@@ -857,8 +919,8 @@ INTERDIT de copier ou paraphraser le contenu existant mot pour mot.
 ## HEADLINE
 - Format : Role | Valeur Ajoutee | Impact Concret
 - Max 220 caracteres
-- Power words : Driving, Transforming, Building, Scaling, Empowering, Pioneering
-- SEO keywords du secteur
+- Utilise des verbes d'action forts et des mots-cles SEO du secteur, TOUJOURS traduits/adaptes dans la langue demandee par la requete (ne jamais utiliser de mots anglais si une autre langue est demandee)
+- SEO keywords du secteur, dans la langue demandee
 
 ## ABOUT
 - Longueur selon le parametre bioLength
@@ -1011,11 +1073,7 @@ NEVER return anything other than the JSON object."""
 }
 
 
-# ══════════════════════════════════════
-#  CHAT — dedicated classifier + help prompts
-#  Splitting these two concerns stops the router from truncating
-#  real help answers inside a bloated JSON schema.
-# ══════════════════════════════════════
+# Chat classifier and help prompts
 
 _CHAT_CLASSIFIER_PROMPT = """You classify a LinkedIn-extension chat message into ONE of 5 intents and return a compact JSON object.
 
@@ -1055,7 +1113,7 @@ Reference this feature knowledge (use only what the user asked about):
 
 GAP ANALYSIS (Gap tab): Compares the user's profile against another LinkedIn profile OR a job description OR a LinkedIn job posting.
 - Flow: open someone else's LinkedIn profile → click "Extract Target Profile" → click "Analyze".
-- Output: overall score, section-by-section breakdown, quick wins, a ready-to-send connection message, a 90-day roadmap, and content ideas.
+- Output: overall score, section-by-section breakdown, quick wins, a ready-to-send connection message, a 30-day roadmap, and content ideas.
 - Needs the user's own profile extracted first (Home tab).
 
 NETWORK SCAN (Network tab): Scores a list of LinkedIn people for your networking goal.
@@ -1079,9 +1137,7 @@ CONTINUITY: If the user message includes a block titled "Relevant context from y
 Match your answer's language to the user's message (English or French)."""
 
 
-# ══════════════════════════════════════
-#  CORE AZURE OPENAI CALL
-# ══════════════════════════════════════
+# Azure OpenAI call helper
 
 _LANG_NAMES = {"en": "English", "fr": "French", "es": "Spanish", "de": "German", "ar": "Arabic", "pt": "Portuguese", "it": "Italian"}
 
@@ -1112,10 +1168,7 @@ async def call_azure(
     if response_format:
         payload["response_format"] = response_format
 
-    # Retry strategy:
-    #  - ConnectError/ConnectTimeout/RemoteProtocolError: transient → retry up to 3x
-    #  - ReadTimeout: Azure is mid-generation. Retrying re-runs the whole call from scratch
-    #    (costs another full latency budget) — only retry ONCE for ReadTimeout, then bail.
+    # Retry transient errors up to 3 times. Only retry ReadTimeout once.
     t0 = time()
     last_exc: Optional[Exception] = None
     response = None
@@ -1181,9 +1234,7 @@ def _is_content_filter_error(exc: Exception) -> bool:
             'ResponsibleAIPolicyViolation' in detail)
 
 
-# ══════════════════════════════════════
-#  REQUEST MODELS
-# ══════════════════════════════════════
+# Request body models
 
 class AuthRequest(BaseModel):
     email: str
@@ -1230,16 +1281,14 @@ class ChatRequest(BaseModel):
     profile: Optional[dict] = {}
     history: Optional[list] = []
     ui_lang: Optional[str] = "en"
-    # Compact summary of the most recent gap analysis (if any) so chat answers stay grounded
+    # Summary of the most recent gap analysis to provide context in chat
     gap_summary: Optional[dict] = None
 
 class ProfileSnapshotRequest(BaseModel):
     profile: dict
 
 
-# ══════════════════════════════════════
-#  USAGE LOG HELPER
-# ══════════════════════════════════════
+# Usage logging helper
 
 async def _log(
     user_doc_id: Optional[str],
@@ -1273,9 +1322,7 @@ async def _log(
         pass  # Never let logging crash the main request
 
 
-# ══════════════════════════════════════
-#  BASIC ROUTES
-# ══════════════════════════════════════
+# Basic routes
 
 @app.get("/")
 def root():
@@ -1331,14 +1378,11 @@ async def test_connection():
     return {"success": True, "data": results}
 
 
-# ══════════════════════════════════════
-#  AUTH ROUTES
-# ══════════════════════════════════════
+# Authentication routes
 
 @app.post("/auth/register")
 async def register(data: AuthRequest):
-    # SUBUL-ONLY MODE: account creation via email/password is disabled.
-    # Only Subul users can access this extension.
+    # Registration via email/password is disabled - only Subul users can sign up
     raise HTTPException(
         status_code=403,
         detail=(
@@ -1381,7 +1425,7 @@ async def login(data: AuthRequest):
     user  = await cosmos_db.upsert_oauth_user(email, source="subul")
     token = create_token(user["id"], is_admin=False)
 
-    # Save Subul JWT so /subul/sync can fetch learning data later
+    # Store the Subul JWT for later use by /subul/sync
     asyncio.create_task(cosmos_db.save_subul_token(user["id"], access_token))
 
     await _log(user["id"], "subul_login_via_signin_tab", "", 0, 0, 0, True, None)
@@ -1410,7 +1454,7 @@ async def subul_login(data: AuthRequest):
     """Authenticate via SUBUL JWT API — POST /api/auth/login."""
     subul_url = os.getenv("SUBUL_API_URL", "https://app.subul.uk").rstrip("/")
 
-    # Step 1: Call SUBUL's login API
+    # Call Subul's login API
     try:
         resp = await _outbound_client.post(
             f"{subul_url}/api/auth/login",
@@ -1420,7 +1464,7 @@ async def subul_login(data: AuthRequest):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Could not reach SUBUL: {e}")
 
-    # Step 2: Check credentials are valid
+    # Validate the Subul login response
     if resp.status_code not in (200, 201):
         raise HTTPException(status_code=401, detail="Invalid SUBUL credentials")
 
@@ -1431,16 +1475,16 @@ async def subul_login(data: AuthRequest):
     if not access_token:
         raise HTTPException(status_code=401, detail="No token received from SUBUL")
 
-    # Step 3: Extract user info
+    # Extract user info from the response
     email     = subul_user.get("email", data.email)
     full_name = subul_user.get("fullName", "")
     role      = subul_user.get("role", "")
 
-    # Step 4: Create or find user in Cosmos DB
+    # Find or create the user in Cosmos DB
     user  = await cosmos_db.upsert_oauth_user(email, source="subul")
     token = create_token(user["id"], is_admin=False)
 
-    # Save Subul JWT so /subul/sync can fetch learning data later
+    # Store the Subul JWT for later use by /subul/sync
     asyncio.create_task(cosmos_db.save_subul_token(user["id"], access_token))
 
     await _log(user["id"], "subul_login", "", 0, 0, 0, True, None)
@@ -1470,8 +1514,7 @@ async def subul_token_login(data: SubulTokenRequest):
     email = data.email or ""
     full_name = data.name or ""
 
-    # ── Decode JWT payload locally (no signature verification needed —
-    #    the token came from the user's own authenticated browser session) ──
+    # Decode the JWT payload locally (no verification needed, token came from the user)
     try:
         parts = data.subul_token.split(".")
         if len(parts) == 3:
@@ -1499,7 +1542,7 @@ async def subul_token_login(data: SubulTokenRequest):
     except Exception:
         pass  # If decode fails, fall through to email from request body
 
-    # If still no email, try Subul API as last resort
+    # Fall back to the Subul API if email is still not found
     if not email:
         subul_url = os.getenv("SUBUL_API_URL", "https://app.subul.uk").rstrip("/")
         for path in ["/api/auth/me", "/api/users/me"]:
@@ -1583,19 +1626,17 @@ async def auth_linkedin(data: LinkedInAuthRequest):
     return {"token": token, "email": email}
 
 
-# ══════════════════════════════════════
-#  AI GENERATION ROUTES
-# ══════════════════════════════════════
+# AI generation routes
 
 @app.post("/generate-post")
 async def generate_post(
     data: PostRequest,
     user_doc_id: Optional[str] = Depends(get_current_user_optional),
 ):
-    # Frame the topic as explicitly professional to reduce Azure content filter triggers
+    # Phrase the topic as professional to avoid content filter issues
     sanitized_topic = f"[Safe professional LinkedIn post — career/tech reflection]: {data.topic}. This is a professional reflection on a work or learning experience, suitable for LinkedIn."
 
-    # Build compact but rich author context from available profile fields
+    # Build a short profile context to personalize the post
     exp_lines = ""
     if data.experience:
         exp_lines = "\n".join(
@@ -1624,7 +1665,7 @@ async def generate_post(
     if exp_lines:        author_ctx += f"- Expériences:\n{exp_lines}\n"
     if skills_line:      author_ctx += f"- Compétences: {skills_line}\n"
 
-    # Style examples from author's own posts
+    # Include the user's past posts as style examples
     style_block = ""
     if data.recent_posts:
         examples = [p.get("text", "") for p in data.recent_posts[:3] if p.get("text")]
@@ -1661,7 +1702,7 @@ async def generate_post(
         f"RÈGLE ABSOLUE #3: {type_rule}"
     )
 
-    # Dynamic max_tokens by length — output tokens are the dominant latency driver
+    # Set max_tokens based on the requested post length
     _post_max = {"short": 450, "long": 1100}.get(data.length or "medium", 700)
 
     success = True
@@ -1695,7 +1736,7 @@ async def generate_post(
                    tokens_in, tokens_out, latency_ms, success, error_msg)
         raise
 
-    # Success path: log fire-and-forget so the user gets the post immediately
+    # Log the usage in the background so the response is returned quickly
     asyncio.create_task(_log(
         user_doc_id, "generate_post", POST_DEPLOYMENT,
         tokens_in, tokens_out, latency_ms, success, error_msg,
@@ -1730,15 +1771,23 @@ async def generate_profile(
     bio_map = {"short": "2-3 phrases concises", "medium": "2-3 paragraphes", "long": "4-5 paragraphes detailles"}
     bio_instruction = bio_map.get(data.bioLength or "medium", "2-3 paragraphes")
 
+    _lang_map = {"FR": "français", "EN": "English", "AR": "العربية", "ES": "español", "DE": "Deutsch"}
+    _lang_name = _lang_map.get((data.language or "EN").upper(), data.language or "EN")
+    _lang_line = f"Langue OBLIGATOIRE : {data.language} ({_lang_name} uniquement, aucun autre mot)"
+
     field_instructions = ""
     if "headline" in fields:
         field_instructions += (
             f"\n\n### HEADLINE\n"
             f"INTERDIT de copier : \"{data.currentHeadline}\"\n"
             "Cree un headline COMPLETEMENT NOUVEAU. Format : Role | Valeur | Impact. Max 220 chars.\n"
+            f"{_lang_line}\n"
         )
     if "about" in fields:
-        field_instructions += f"\n\n### ABOUT\nLongueur : {bio_instruction}. Premiere personne. Hook percutant. CTA final."
+        field_instructions += (
+            f"\n\n### ABOUT\nLongueur : {bio_instruction}. Premiere personne. Hook percutant. CTA final."
+            f"\n{_lang_line}"
+        )
     if "experience" in fields:
         field_instructions += (
             "\n\n### EXPERIENCE"
@@ -1749,7 +1798,7 @@ async def generate_profile(
             "\n2. Inclure un résultat ou impact CONCRET et SPECIFIQUE au poste"
             "\n3. JAMAIS de texte générique comme 'Deuxième bullet' ou 'Troisième bullet'"
             "\n4. JAMAIS copier la description originale mot pour mot"
-            f"\n5. Langue OBLIGATOIRE : {data.language} (FR=français uniquement, EN=English only)"
+            f"\n5. {_lang_line}"
         )
     if "skills" in fields:
         # data.skills is a comma-separated string in ProfileRequest
@@ -1769,6 +1818,7 @@ async def generate_profile(
             f"\nsuggestions = 5-8 competences NOUVELLES absentes de la liste ci-dessus, pertinentes data/AI/tech"
             "\nREGLE ABSOLUE : existing doit contenir EXACTEMENT les memes competences que la liste ci-dessus."
             "\nREGLE ABSOLUE : suggestions NE DOIT PAS contenir de competences deja dans existing."
+            f"\n{_lang_line} (s'applique a 'suggestions' ; 'existing' reste tel quel, inchange)"
         )
 
     json_shape = ", ".join([
@@ -1786,8 +1836,6 @@ async def generate_profile(
     if data.instructions:
         prompt += f"\n- Instructions : {data.instructions}"
     prompt += field_instructions
-    _lang_map = {"FR": "français", "EN": "English", "AR": "العربية", "ES": "español", "DE": "Deutsch"}
-    _lang_name = _lang_map.get((data.language or "EN").upper(), data.language or "EN")
     prompt += f"\n\nLANGUE DE SORTIE OBLIGATOIRE : tous les textes dans le JSON DOIVENT être en {_lang_name}. Cette règle est ABSOLUE et s'applique à TOUS les champs."
     prompt += f"\n\nRetourne UNIQUEMENT un JSON valide : {{ {json_shape} }}"
 
@@ -1824,7 +1872,7 @@ async def route_chat(
     """
     p = data.profile or {}
 
-    # ── Compact conversation history (last 6 turns × 300 chars) ──
+    # Include the last 6 chat turns, trimmed to 300 chars each
     history_lines = []
     for m in (data.history or [])[-6:]:
         role = "U" if m.get("role") == "user" else "A"
@@ -1833,7 +1881,7 @@ async def route_chat(
             history_lines.append(f"{role}: {content}")
     history_ctx = ("\nRecent turns:\n" + "\n".join(history_lines)) if history_lines else ""
 
-    # ── Slim profile context for the classifier (≤4 fields) ──
+    # Attach a short profile summary for context
     profile_ctx = (
         f"User profile: headline=\"{(p.get('headline') or 'unknown')[:120]}\", "
         f"role=\"{(p.get('currentRole') or '')[:80]}\", "
@@ -1847,9 +1895,7 @@ async def route_chat(
         f"{history_ctx}"
     )
 
-    # ── Gap analysis summary context if present ──
-    # When the user just ran a gap analysis, they often follow up in chat.
-    # We pass a compact summary so help-intent answers stay grounded.
+    # Attach the most recent gap analysis summary if available
     gap_summary_ctx = ""
     try:
         if getattr(data, "gap_summary", None):
@@ -1863,7 +1909,7 @@ async def route_chat(
     except Exception:
         pass
 
-    # ── Phase 1: Classifier ──
+    # Phase 1: classify the intent of the message
     raw = ""
     tokens_in = tokens_out = latency_ms = 0
     try:
@@ -1893,8 +1939,7 @@ async def route_chat(
 
     intent = parsed.get("intent", "conversation")
 
-    # ── Phase 2: For help/conversation, generate a real answer ──
-    # For post/profile/networking, reply is just a short ack (generator runs next).
+    # Phase 2: for help questions, generate a full answer
     if intent in ("help", "conversation"):
         # Inject FAQ context only for help/conversation, and only when keywords match.
         faq_context = ""
@@ -2018,7 +2063,7 @@ async def route_chat(
         parsed.setdefault("length", "medium")
         parsed.setdefault("language", "EN")
 
-    # Persist chat for intent routing improvement
+    # Save the chat record for training and analysis
     try:
         if cosmos_db.cosmos_configured() and user_doc_id:
             await cosmos_db.save_chat_message(
@@ -2032,11 +2077,7 @@ async def route_chat(
     return {"success": True, "data": parsed}
 
 
-# ══════════════════════════════════════
-#  USER LINKEDIN PROFILE (persistent)
-#  Save profile to user doc in Cosmos DB
-#  so extension pre-fills on next login
-# ══════════════════════════════════════
+# User LinkedIn profile persistence
 
 class UserProfileRequest(BaseModel):
     profile: dict
@@ -2050,7 +2091,7 @@ async def save_my_profile(
     if not user_doc_id:
         raise HTTPException(status_code=401, detail="Authentication required")
     saved = await cosmos_db.save_user_linkedin_profile(user_doc_id, data.profile)
-    # Fire profile-extracted notification email (non-blocking)
+    # Send a notification email in the background
     asyncio.create_task(_maybe_send_profile_extracted_email(user_doc_id, data.profile or {}))
     return {"success": True, "data": saved}
 
@@ -2066,9 +2107,7 @@ async def get_my_profile(
     return {"success": True, "data": profile}
 
 
-# ══════════════════════════════════════
-#  PROFILE SNAPSHOT
-# ══════════════════════════════════════
+# Profile snapshot routes
 
 @app.post("/profile-snapshot")
 async def save_profile_snapshot(
@@ -2156,9 +2195,7 @@ async def get_profile_snapshot(
     return {"success": True, "data": doc}
 
 
-# ══════════════════════════════════════
-#  ADMIN ROUTES
-# ══════════════════════════════════════
+# Admin routes
 
 @app.get("/admin/stats")
 async def admin_stats(_: None = Depends(require_admin)):
@@ -2396,9 +2433,7 @@ async def admin_feature_stats(_: None = Depends(require_admin)):
     }
 
 
-# ══════════════════════════════════════
-#  SUBUL USERS
-# ══════════════════════════════════════
+# Subul user management routes
 
 @app.get("/admin/subul/stats")
 async def admin_subul_stats(_: None = Depends(require_admin)):
@@ -2434,9 +2469,7 @@ async def admin_subul_users(
     }
 
 
-# ══════════════════════════════════════
-#  FAQ KNOWLEDGE BASE (admin-managed)
-# ══════════════════════════════════════
+# FAQ knowledge base routes
 
 class FaqUpsertRequest(BaseModel):
     faq_id: str
@@ -2469,9 +2502,7 @@ async def admin_delete_faq(faq_id: str, _: None = Depends(require_admin)):
         raise HTTPException(status_code=404, detail=str(e))
 
 
-# ══════════════════════════════════════
-#  PER-USER DATA (individual user tracking)
-# ══════════════════════════════════════
+# Per-user data routes
 
 @app.get("/admin/users/{user_doc_id}/data")
 async def admin_user_data(
@@ -2512,9 +2543,7 @@ async def admin_user_ai_history(
     return await cosmos_db.get_user_ai_history(user_doc_id)
 
 
-# ══════════════════════════════════════
-#  NETWORKING ROUTES
-# ══════════════════════════════════════
+# Networking routes
 
 class NetworkingGoalRequest(BaseModel):
     goal: str                                      # job_search | clients | investors | learning
@@ -2609,8 +2638,7 @@ async def score_candidates(
 
     goal = user_net_profile.get("goal", "default")
 
-    # Enrich candidates with derived fields that the scorer needs but the scraper
-    # doesn't set directly. This runs in-place before scoring so scores are data-driven.
+    # Fill in derived fields the scorer needs but the scraper does not set directly
     def _derive_post_frequency(last_post_days) -> str:
         """Map scraped last_post_days to the enum expected by _engagement_score."""
         if last_post_days is None:
@@ -2685,7 +2713,7 @@ async def generate_connection_message(
     mutual = t.get("mutual_connections_count", 0)
     mutual_text = f"{mutual} mutual connection{'s' if mutual != 1 else ''}" if mutual else "no mutual connections"
 
-    # Compute real shared signals from actual data — gives AI something specific to reference
+    # Compute shared signals from real data to give the AI useful context
     user_skills = set(s.lower() for s in (u.get("skills_list") or u.get("skills") or []))
     target_skills = set(s.lower() for s in (t.get("skills_list") or t.get("skills") or []))
     shared_skills = list(user_skills & target_skills)[:3]
@@ -2738,7 +2766,7 @@ async def generate_connection_message(
         await _log(user_doc_id, "networking_message", PROFILE_DEPLOYMENT,
                    tokens_in, tokens_out, latency_ms, success, error_msg)
 
-    # Log to message performance dataset
+    # Save the message to the performance tracking dataset
     msg_id = await cosmos_db.log_message_performance(user_doc_id, {
         "target_profile_id":  t.get("url_slug") or t.get("name", ""),
         "message_text":       message_text,
@@ -2758,7 +2786,7 @@ async def log_networking_interaction(
     if not user_doc_id:
         raise HTTPException(status_code=401, detail="Authentication required")
     doc_id = await cosmos_db.log_interaction(user_doc_id, data.model_dump())
-    # Bust networking stats cache
+    # Clear the networking stats cache
     await cosmos_db.cache_delete("networking_stats")
     return {"success": True, "data": {"id": doc_id}}
 
@@ -2867,7 +2895,8 @@ MESSAGE RULES:
 FACTUALITY — NON-NEGOTIABLE:
 - Every claim in match_summary, strengths, and fit_assessment MUST cite actual fields from the target data (title, company, specific skill names, mutual count).
 - NEVER invent overlap not in the data. If data is thin, acknowledge it honestly instead of fabricating.
-- Missing engagement data is a scraping limitation, NOT evidence of inactivity — do not penalise for it."""
+- ENGAGEMENT DATA: If post_frequency is "unknown" or missing, you MUST NOT write any strength or claim about posting frequency, posting habits, likes per post, engagement rate, or activity level. Do not write phrases like "posting 1-3 times per week", "active engagement", "5-15 likes per post", or any similar invented stat. Omit engagement bullets entirely when data is absent.
+- Missing engagement data is a scraping limitation — silence on it is correct. Fabricating engagement numbers is a critical factuality violation."""
 
 
 def _build_analysis_prompt(user: dict, target: dict, goal: str,
@@ -2919,6 +2948,15 @@ def _build_analysis_prompt(user: dict, target: dict, goal: str,
             f"  Your score = BASELINE_SCORE + score_delta, clamped to [0, 100].\n"
         )
 
+    t_post_freq = target.get("post_frequency") or "unknown"
+    t_engagement = target.get("avg_engagement_rate")
+    engagement_block = (
+        "  Posting activity: DATA NOT AVAILABLE — do NOT mention or infer posting frequency, likes, or engagement in any output field.\n"
+        if t_post_freq == "unknown" or t_post_freq == "" else
+        f"  Post frequency: {t_post_freq}\n"
+        f"  Avg engagement rate: {t_engagement or 'unknown'}\n"
+    )
+
     title_signal = target.get('title','') or target.get('currentRole','')
 
     return (
@@ -2946,6 +2984,7 @@ def _build_analysis_prompt(user: dict, target: dict, goal: str,
         f"  Industry: {target.get('industry','') or '(unknown)'}\n"
         f"  Seniority: {target.get('seniority','') or '(unknown)'}\n"
         f"  Mutual connections: {target.get('mutual_connections_count', 0)}\n"
+        f"{engagement_block}"
         f"{data_note}"
     )
 
@@ -3168,15 +3207,15 @@ async def analyze_profiles(
             await cosmos_db.save_networking_analysis(user_doc_id, data.goal or "job_search", results)
     except Exception as e:
         print(f"[WARN] Failed to save networking analysis to Cosmos DB: {e}")
-    # ── Send networking analysis email (fire-and-forget, deep scan only) ───────
-    # force_refresh=True is already set by the extension on the deep-scan call,
-    # so we reuse it as the signal — one email, after the richest data is ready.
-    if data.force_refresh:
-        asyncio.create_task(_maybe_send_networking_email(
-            user_doc_id=user_doc_id,
-            results=list(results),
-            goal=data.goal or "job_search",
-        ))
+    # ── Send networking analysis email (fire-and-forget) ───────────────────
+    # Previously gated on force_refresh (only set by the deep-scan re-analysis
+    # call), but the deep scan is now disabled — the shallow pass is the only
+    # analysis pass, so send the email here unconditionally instead.
+    asyncio.create_task(_maybe_send_networking_email(
+        user_doc_id=user_doc_id,
+        results=list(results),
+        goal=data.goal or "job_search",
+    ))
     return {"success": True, "data": results}
 
 
@@ -3617,8 +3656,9 @@ Write like a sharp recruiting friend who tells the truth without sugarcoating.
 2. NEVER infer facts not present ("they probably have X given their role").
 3. "rewrite" / "rewrite_hint" / "first_message" MUST use the USER's real role, company, and field.
 4. "missing" skills MUST NOT include any skill already in the user's list.
-5. quick_wins + 90_day_roadmap: each item must name a specific gap and be completable in its stated window.
+5. quick_wins + 30_day_roadmap: each item must name a specific gap and be completable in its stated window.
 6. first_message MUST reference ONE specific detail from the target's profile (a role, a skill, a company, a project). Reject generic openers.
+7. EVERY section (headline, about, experience, skills, education) MUST include a non-empty "insight" field. Never leave it blank or generic — it must say something specific that the "gap" field does not already say.
 7. Keep text CONSISTENT with the precomputed scores. If headline_score=72, do NOT call the headline "weak". If about_score=15, do NOT call the about "solid".
 
 ## OUTPUT FORMAT — STRICT JSON, TEXT ONLY (no scores)
@@ -3644,6 +3684,7 @@ Output ONLY valid JSON with this exact shape:
     },
     "skills": {
       "gap": "Skill STRATEGY, not just counts. Trending vs. stale? Breadth vs. depth?",
+      "insight": "What does the skill mix signal about each person's specialization or focus?",
       "missing": ["5-7 skills USER should add — NOT already in their list, each with 1-line rationale"],
       "advantage": ["up to 3 skills USER has that target doesn't — framed as competitive edges"],
       "skill_positioning": "How should the user reorder/prioritize skills for impact?"
@@ -3657,6 +3698,12 @@ Output ONLY valid JSON with this exact shape:
       "content_strategy": "What kind of creator should they become based on their expertise?"
     }
   },
+  "30_day_roadmap": [
+    {"week": "1", "action": "specific action referencing actual gaps", "expected_result": "what changes"},
+    {"week": "2", "action": "next phase", "expected_result": "measurable outcome"},
+    {"week": "3", "action": "medium-term", "expected_result": "how the profile looks now"},
+    {"week": "4", "action": "final stage", "expected_result": "the transformation"}
+  ],
   "quick_wins": [
     {"action": "hyper-specific action using real profile data", "time": "e.g. 10 min", "impact": "high|medium|low", "difficulty": "easy|medium|hard"},
     {"action": "...", "time": "...", "impact": "...", "difficulty": "..."},
@@ -3670,12 +3717,6 @@ Output ONLY valid JSON with this exact shape:
     "followup": "Follow-up message to send after they accept (1-3 sentences, adds value, no hard sell)."
   },
   "key_insight": "The single most important thing. Brutally specific. A revelation that makes the user want to edit their profile now.",
-  "90_day_roadmap": [
-    {"week": "1-2", "action": "specific action referencing actual gaps", "expected_result": "what changes"},
-    {"week": "3-4", "action": "next phase", "expected_result": "measurable outcome"},
-    {"week": "5-8", "action": "medium-term", "expected_result": "how the profile looks now"},
-    {"week": "9-12", "action": "final stage", "expected_result": "the transformation"}
-  ],
   "content_ideas": [
     {"topic": "from USER's expertise", "format": "carousel|story|opinion|how-to|case-study", "hook": "actual first line", "why": "why this resonates"},
     {"topic": "...", "format": "...", "hook": "...", "why": "..."},
@@ -3691,7 +3732,126 @@ Output ONLY valid JSON with this exact shape:
 5. Junior user? Frame as "growth trajectory" — honest but empowering.
 6. If user is stronger somewhere, say so — target isn't always better.
 7. NEVER fabricate info not in the data.
-8. If data is genuinely sparse, say so explicitly."""
+8. If data is genuinely sparse, say so explicitly.
+9. The following top-level fields are ALWAYS REQUIRED and must never be omitted or left empty, regardless of data sparsity: "connection_strategy" (with non-empty "context", "first_message", and "followup"), and "30_day_roadmap" (exactly 4 entries, one per week). If the profiles are sparse, still produce these fields using whatever real data is available — never skip them."""
+
+
+def _fallback_30_day_roadmap(u_pre: dict, target_profile: dict) -> list:
+    """
+    Deterministic backstop: if the AI omits 30_day_roadmap, build a reasonable
+    one from the precomputed section scores so the user never sees an empty
+    roadmap card. Prioritizes the user's 2 weakest sections.
+    """
+    weak = sorted(
+        [(k, v) for k, v in u_pre.items() if k != "content"],
+        key=lambda kv: kv[1]
+    )
+    labels = {
+        "headline": "Rewrite your headline to lead with your strongest skill and current focus.",
+        "about": "Rewrite your About section with a clear hook, 2-3 concrete achievements, and a call to action.",
+        "experience": "Add quantified outcomes (numbers, impact) to your most recent 2 roles.",
+        "skills": "Add 5-8 relevant skills you're missing and reorder them to lead with your strongest.",
+        "education": "Fill in missing details on your education entries (field of study, dates).",
+    }
+    target_name = (target_profile.get("name") or "your target").split()[0] if target_profile.get("name") else "your target"
+    steps = []
+    for i, (key, _score) in enumerate(weak[:2]):
+        steps.append({
+            "week": str(i + 1),
+            "action": labels.get(key, f"Improve your {key} section."),
+            "expected_result": f"A stronger, more complete {key} section.",
+        })
+    steps.append({
+        "week": "3",
+        "action": f"Engage with {target_name}'s recent posts and 2-3 others in your target field to build visibility.",
+        "expected_result": "Increased profile views and warmer outreach context.",
+    })
+    steps.append({
+        "week": "4",
+        "action": "Publish one piece of content showcasing your expertise, then reach out to 3-5 relevant connections.",
+        "expected_result": "Stronger personal brand and an expanded, more relevant network.",
+    })
+    return steps
+
+
+def _fallback_connection_strategy(user_profile: dict, target_profile: dict) -> dict:
+    """Deterministic backstop if the AI omits connection_strategy entirely."""
+    target_name = (target_profile.get("name") or "them").split()[0] if target_profile.get("name") else "them"
+    target_role = (target_profile.get("headline") or target_profile.get("title") or "").strip()
+    user_role = (user_profile.get("headline") or user_profile.get("currentRole") or "").strip()
+    context = "You're both active in related fields — connecting could open the door to shared insights and opportunities."
+    first_message = (
+        f"Hi {target_name}, I came across your profile and was interested in your work"
+        + (f" as {target_role}" if target_role else "") + ". "
+        + (f"I'm currently focused on {user_role.split('|')[0].strip()}, " if user_role else "")
+        + "and would love to connect."
+    )[:290]
+    followup = "Thanks for connecting! Always happy to exchange ideas or learn more about what you're working on."
+    return {"context": context, "first_message": first_message, "followup": followup}
+
+
+def _sanitize_identity_leak(result: dict, user_profile: dict, target_profile: dict) -> dict:
+    """
+    Deterministic guard: strip the target's employer name if it leaked into the
+    USER's free-text rewrite fields in a way that falsely claims the user works
+    there (e.g. "Currently a Data Engineer at AFD Technologies...").
+
+    Only the target's COMPANY name is treated as forbidden — not generic skill,
+    tool, or certification words (Azure, Databricks, "Certified", etc.) that may
+    legitimately appear in a rewrite when contrasting the user against the
+    target's strengths. Stripping those produced broken sentences like
+    "Data Engineer | ... | & - Ready to tackle..." which is worse than the bug
+    it was meant to fix.
+    """
+    target_company = (target_profile.get("company") or target_profile.get("currentCompany") or "").strip()
+
+    if not target_company:
+        return result
+
+    forbidden = {target_company}
+    first_word = target_company.split()[0] if target_company.split() else ""
+    if first_word and len(first_word) >= 3:
+        forbidden.add(first_word)
+
+    rewrite_paths = [
+        ("sections", "headline", "rewrite"),
+        ("sections", "about",    "rewrite_hint"),
+    ]
+
+    fired = False
+    for path in rewrite_paths:
+        node = result
+        for key in path[:-1]:
+            node = node.get(key, {}) if isinstance(node, dict) else {}
+        leaf_key = path[-1]
+        if not isinstance(node, dict):
+            continue
+        text = node.get(leaf_key, "")
+        if not isinstance(text, str):
+            continue
+        original = text
+        for term in forbidden:
+            pattern = re.compile(re.escape(term), re.IGNORECASE)
+            text = pattern.sub("", text)
+        text = re.sub(r"\s*\|\s*$", "", text.strip())
+        text = re.sub(r"\s{2,}", " ", text).strip()
+        # Clean dangling prepositions/connectors left by removal (e.g. "at , " "@ ," "| & -")
+        text = re.sub(r"\b(at|@|with|for|by)\s*[,.]?\s*(\||,|$)", r"\2", text).strip()
+        text = re.sub(r"\s*,\s*,", ",", text).strip()
+        text = re.sub(r"\|\s*&\s*-", "-", text).strip()  # leftover "| & -" fragments
+        text = re.sub(r"^\s*[|\-]\s*", "", text).strip()
+        if text != original:
+            fired = True
+            logging.warning(
+                f"[identity_leak_guard] Sanitized '{leaf_key}': removed forbidden term(s) "
+                f"{forbidden}. Before: {original[:120]!r} | After: {text[:120]!r}"
+            )
+            node[leaf_key] = text
+
+    if fired:
+        result["_identity_leak_guard"] = True
+
+    return result
 
 def _format_exp(entries: list, limit: int = 5) -> str:
     lines = []
@@ -3991,8 +4151,14 @@ async def profile_gap_analysis(
     gap_cache_key = None
     if cosmos_db.cosmos_configured():
         try:
-            t_slug = data.target_profile.get("url_slug", "") or (data.target_profile.get("name") or "")[:40]
+            # Always include target name in the slug so different people never share a cache key,
+            # even when url_slug is absent (e.g. scraped from a feed card).
+            target_name_slug = re.sub(r"[^a-z0-9]", "", (data.target_profile.get("name") or "").lower())[:30]
+            target_url_slug  = re.sub(r"[^a-z0-9-]", "", (data.target_profile.get("url_slug") or "").lower())[:40]
+            t_slug = target_url_slug or target_name_slug or "unknown"
+
             t_sig = json.dumps({
+                "name": (data.target_profile.get("name") or "")[:60],   # <-- added: name is now part of hash
                 "h": (data.target_profile.get("headline") or "")[:120],
                 "exp_n": len(data.target_profile.get("experience") or []),
                 "skills_n": len(data.target_profile.get("skills") or []),
@@ -4003,10 +4169,12 @@ async def profile_gap_analysis(
                 "goal": data.goal or "job_search",
                 "lang": data.ui_lang or "en",
             }, sort_keys=True)
-            gap_cache_key = f"gap_analysis:{user_doc_id}:{t_slug}:{hashlib.md5(t_sig.encode()).hexdigest()[:10]}"
+            gap_cache_key = f"gap_analysis_v7:{user_doc_id}:{t_slug}:{hashlib.md5(t_sig.encode()).hexdigest()[:10]}"
             cached = await cosmos_db.get_cache(gap_cache_key)
             if cached:
                 await _log(user_doc_id, "gap_analysis_cache_hit", deployment, 0, 0, 0, True, None)
+                # Attach whose cached result this is so the frontend can warn the user if needed
+                cached["_cached_for_target"] = (data.target_profile.get("name") or "")
                 return {"success": True, "data": cached, "cached": True}
         except Exception:
             pass
@@ -4131,11 +4299,11 @@ async def profile_gap_analysis(
     tokens_in = tokens_out = latency_ms = 0
     ai = None
 
-    for _attempt in range(2):
+    for _attempt in range(3):
         try:
-            # Second attempt uses a tighter token budget so a slow Azure region
-            # doesn't trigger another ReadTimeout — the first failure already cost time.
-            attempt_max_tokens = 3500 if _attempt == 0 else 2500
+            # Tighter token budget on later attempts so a slow Azure region
+            # doesn't trigger another ReadTimeout — earlier failures already cost time.
+            attempt_max_tokens = 4200 if _attempt == 0 else (3200 if _attempt == 1 else 2400)
             raw, tokens_in, tokens_out, latency_ms = await call_azure(
                 deployment=deployment,
                 system=_GAP_ANALYSIS_PROMPT,
@@ -4151,7 +4319,7 @@ async def profile_gap_analysis(
         except json.JSONDecodeError as e:
             last_err = f"JSON parse error (attempt {_attempt+1}): {e} | raw[:200]={raw[:200]}"
             logging.warning(f"[gap_analysis] {last_err}")
-            if _attempt == 1:
+            if _attempt == 2:
                 await _log(user_doc_id, "gap_analysis", deployment, 0, 0, 0, False, last_err[:200])
                 raise HTTPException(status_code=502, detail="AI returned invalid response -- please retry")
         except Exception as e:
@@ -4168,10 +4336,10 @@ async def profile_gap_analysis(
     # ── Deterministic score label from overall score (computed below) ──
     def _label_from_score(s: int) -> str:
         if s >= 85: return "Dominating"
-        if s >= 70: return "Ahead"
-        if s >= 55: return "On Par"
-        if s >= 40: return "Closing In"
-        if s >= 25: return "Behind"
+        if s >= 65: return "Ahead"
+        if s >= 40: return "On Par"
+        if s >= 25: return "Closing In"
+        if s >= 10: return "Behind"
         return "Far Behind"
 
     # ── Deterministic power metrics (radar chart) — no LLM involvement ──
@@ -4232,8 +4400,9 @@ async def profile_gap_analysis(
             },
             "skills": {
                 "gap": str(sk.get("gap", "")),
-                "missing": sk.get("missing", []) or [],
-                "advantage": sk.get("advantage", []) or [],
+                "insight": str(sk.get("insight", "")),
+                "missing": sk.get("missing") if isinstance(sk.get("missing"), list) else [],
+                "advantage": sk.get("advantage") if isinstance(sk.get("advantage"), list) else [],
                 "skill_positioning": sk.get("skill_positioning", ""),
             },
             "education": {
@@ -4249,10 +4418,16 @@ async def profile_gap_analysis(
         "connection_strategy": (
             ai.get("connection_strategy", {})
             if isinstance(ai.get("connection_strategy"), dict)
-            else {"context": str(ai.get("connection_strategy", "")), "first_message": "", "followup": ""}
+            and ai.get("connection_strategy", {}).get("first_message")
+            and ai.get("connection_strategy", {}).get("followup")
+            else _fallback_connection_strategy(data.user_profile, data.target_profile)
         ),
         "key_insight": ai.get("key_insight", ""),
-        "90_day_roadmap": ai.get("90_day_roadmap", []) if isinstance(ai.get("90_day_roadmap"), list) else [],
+        "30_day_roadmap": (
+            ai.get("30_day_roadmap")
+            if isinstance(ai.get("30_day_roadmap"), list) and len(ai.get("30_day_roadmap")) >= 3
+            else None  # placeholder — filled below once u_pre is available (AI gave too few/none)
+        ),
         "content_ideas": ai.get("content_ideas", []) if isinstance(ai.get("content_ideas"), list) else [],
     }
     # ── Deterministic section scores (override AI — no hallucination possible) ──────────────
@@ -4287,8 +4462,31 @@ async def profile_gap_analysis(
         "network_signal":      {"user": _network_signal(u, u_pre),  "target": _network_signal(t, t_pre)},
     }
 
-    # Recompute overall_gap_score from deterministic section scores (user only)
-    result["overall_gap_score"] = min(100, round(
+    # Overall comparison score: how the user stacks up AGAINST the target,
+    # not just the user's own profile strength in isolation.
+    # Built from the same 5 Power Index dimensions shown in the UI, weighted by
+    # how much each dimension matters for a LinkedIn profile's competitiveness.
+    pm = result["power_metrics"]
+    _dim_weights = {
+        "profile_completeness": 0.20,
+        "keyword_strength":     0.15,
+        "narrative_quality":    0.20,
+        "career_trajectory":    0.30,
+        "network_signal":       0.15,
+    }
+    user_weighted = sum(pm[d]["user"]   * w for d, w in _dim_weights.items())
+    targ_weighted = sum(pm[d]["target"] * w for d, w in _dim_weights.items())
+
+    # Convert the user-vs-target gap into a 0-100 "comparison score":
+    # 50 = exactly on par, 100 = maximally ahead, 0 = maximally behind.
+    # A 40-point weighted-score gap (e.g. 80 vs 40) saturates the scale.
+    diff = user_weighted - targ_weighted
+    comparison_score = 50 + (diff / 40.0) * 50
+    result["overall_gap_score"] = max(0, min(100, round(comparison_score)))
+
+    # User's own profile strength, kept separately so the UI can still show it
+    # (e.g. "Profile Strength: 64/100") without conflating it with the comparison.
+    result["profile_strength_score"] = min(100, round(
         secs["headline"]["user_score"]   * 0.20 +
         secs["about"]["user_score"]      * 0.20 +
         secs["experience"]["user_score"] * 0.30 +
@@ -4296,8 +4494,13 @@ async def profile_gap_analysis(
         secs["education"]["user_score"]  * 0.10 +
         secs["content"]["user_score"]    * 0.05
     ))
-    # Deterministic label from overall score — LLM no longer picks the band
+    # Deterministic label from the COMPARISON score — LLM no longer picks the band
     result["score_label"] = _label_from_score(result["overall_gap_score"])
+
+    # Resolve 30_day_roadmap placeholder — fall back to deterministic generation
+    # if the AI omitted it (a known LLM compliance gap on long JSON schemas).
+    if not result.get("30_day_roadmap"):
+        result["30_day_roadmap"] = _fallback_30_day_roadmap(u_pre, data.target_profile)
 
     # Detect sparse data — report honestly rather than silently inflating scores
     all_user_zero = all(secs[k].get("user_score", 0) == 0 for k in ("headline", "about", "experience", "skills", "education"))
@@ -4318,7 +4521,10 @@ async def profile_gap_analysis(
             await _log(user_doc_id, "gap_analysis", deployment, tokens_in, tokens_out, latency_ms, True, None)
         except Exception: pass
         if gap_cache_key:
-            try: await cosmos_db.set_cache(gap_cache_key, result, ttl_seconds=21600)
+            try:
+                # Store target name inside cached result so cache hits can identify whose analysis it is
+                result["_cached_for_target"] = data.target_profile.get("name", "")
+                await cosmos_db.set_cache(gap_cache_key, result, ttl_seconds=21600)
             except Exception: pass
         try:
             if cosmos_db.cosmos_configured():
@@ -4330,6 +4536,9 @@ async def profile_gap_analysis(
                 )
         except Exception: pass
     asyncio.create_task(_post_gap_persistence())
+
+    # ── Deterministic identity-leak guard (strips target employer from user rewrite fields) ──
+    result = _sanitize_identity_leak(result, data.user_profile, data.target_profile)
 
     # ── Send gap analysis email notification (fire-and-forget) ──────────────
     asyncio.create_task(_maybe_send_gap_analysis_email(

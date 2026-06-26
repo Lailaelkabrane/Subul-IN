@@ -7,7 +7,9 @@
     "storage",
     "activeTab",
     "scripting",
-    "alarms"
+    "alarms",
+    "tabs",
+    "notifications"
   ],
   "host_permissions": [
     "https://www.linkedin.com/*",
@@ -44,6 +46,12 @@
       ],
       "js": ["content/subul-auth.js"],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["popup/export.html", "popup/export.js"],
+      "matches": ["<all_urls>"]
     }
   ],
   "options_page": "options/options.html",

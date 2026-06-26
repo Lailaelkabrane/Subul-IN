@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Gap Analysis Report</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #f5f5f5; font-family: sans-serif; }
+    #toolbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 999;
+      background: #7c3aed; color: #fff;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    #toolbar span { font-size: 14px; font-weight: 600; }
+    #toolbar button {
+      background: #fff; color: #7c3aed; border: none;
+      padding: 7px 20px; border-radius: 6px;
+      font-size: 13px; font-weight: 700; cursor: pointer;
+    }
+    #toolbar button:hover { background: #ede9fe; }
+    #frame-wrap { margin-top: 52px; }
+    iframe {
+      width: 100%; border: none;
+      min-height: calc(100vh - 52px);
+      background: #fff;
+    }
+    #loading {
+      text-align: center; padding: 80px 20px;
+      font-size: 15px; color: #555;
+    }
+    @media print {
+      #toolbar { display: none !important; }
+      #frame-wrap { margin-top: 0 !important; }
+      iframe { height: 100vh; }
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <span>📄 Gap Analysis Report</span>
+    <button id="printBtn">Save as PDF</button>
+  </div>
+  <div id="frame-wrap">
+    <div id="loading">Loading report…</div>
+    <iframe id="reportFrame" style="display:none"></iframe>
+  </div>
+  <script src="export.js"></script>
+</body>
+</html>

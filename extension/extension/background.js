@@ -1,33 +1,29 @@
-// ===============================================================
-// BACKGROUND -- FastAPI backend calls
-// ===============================================================
+// Background service worker - handles all backend API calls
 
-// Local ports to probe -- 8010 is default, 8000 is uvicorn default (common mistake), others are fallbacks
+// Ports to probe when looking for a local backend
 const _LOCAL_PORTS = [8010, 8000, 8013, 8014, 8015, 8016];
 const _AZURE_URL   = 'https://subulin-api.azurewebsites.net';
 
-// ── Parallel port probing ─────────────────────────────────────────────────────
-// All ports are probed SIMULTANEOUSLY. First successful response wins.
-// This cuts worst-case latency from 18 s (serial) down to ~1.2 s (parallel).
+// Probe all ports at once and use the first successful response
 async function _probeOnePort(port) {
   const base = `http://127.0.0.1:${port}`;
   const res = await fetch(`${base}/health`, { signal: AbortSignal.timeout(1200) });
   if (!res.ok) throw new Error('not ok');
   const data = await res.json().catch(() => ({}));
   if (!data.version) throw new Error('no version');
-  // Verify the critical ai-score endpoint exists (405/422 = registered, ok = fallback)
+  // Check if the ai-score endpoint is registered on this port
   const cap = await fetch(`${base}/profile/ai-score`, { method: 'GET', signal: AbortSignal.timeout(1200) });
   if (cap.status === 405 || cap.status === 422 || cap.ok) return base;
   throw new Error('endpoint missing');
 }
 
 async function _probeLocalBackend() {
-  // Round 1: full check (health version + ai-score endpoint) — all ports in parallel
+  // First try: check health and ai-score on all ports at once
   try {
     return await Promise.any(_LOCAL_PORTS.map(p => _probeOnePort(p)));
   } catch { /* all failed full check */ }
 
-  // Round 2: lenient fallback — any port with gap-analysis registered
+  // Second try: fall back to any port with gap-analysis registered
   try {
     return await Promise.any(_LOCAL_PORTS.map(async port => {
       const base = `http://127.0.0.1:${port}`;
@@ -42,9 +38,9 @@ async function _probeLocalBackend() {
 
 let _cachedBase     = null;
 let _cacheTs        = 0;
-const _CACHE_TTL    = 300000; // 5 min — backend URL doesn't change during a session
+const _CACHE_TTL    = 300000; // 5 minutes - backend URL is stable for the whole session
 
-// In-memory auth token cache — avoids a chrome.storage.sync IPC read on every API call
+// Cache the auth token in memory to avoid reading chrome.storage on every request
 let _cachedAuthToken = null;
 function _setAuthToken(token) { _cachedAuthToken = token || null; }
 function _clearAuthToken()    { _cachedAuthToken = null; }
@@ -62,16 +58,16 @@ async function getApiBase() {
   let url = (data.serverUrl || '').replace(/\/+$/, '');
   url = url.replace(/^(https?:\/\/)localhost\b/, '$1127.0.0.1');
 
-  // Probe and saved-URL lookup run in parallel when possible
+  // Run backend probe and saved-URL lookup in parallel
   const found = await _probeLocalBackend();
   if (found) {
-    if (found !== url) chrome.storage.sync.set({ serverUrl: found }); // fire-and-forget
+    if (found !== url) chrome.storage.sync.set({ serverUrl: found }); // update saved URL in background
     _cachedBase = found;
     _cacheTs    = Date.now();
     return found;
   }
 
-  // No local backend — use saved URL if valid, otherwise Azure
+  // No local backend found - use the saved URL or fall back to Azure
   const result = url || _AZURE_URL;
   if (result === _AZURE_URL) chrome.storage.sync.set({ serverUrl: _AZURE_URL }); // fire-and-forget
   _cachedBase = result;
@@ -79,11 +75,9 @@ async function getApiBase() {
   return result;
 }
 
-// Per-route timeouts in ms. Heavy LLM endpoints (gap analysis, interview prep,
-// job fit) need ≥180s because Azure can take 60-120s under load. 55s was the
-// cause of the "signal timed out" failure mid-generation.
+// Per-route request timeouts in milliseconds. LLM endpoints need long timeouts.
 const _AI_ROUTE_TIMEOUTS = {
-  '/agent/full-analysis':    240000,  // LangGraph: 3-4 chained LLM calls (Level 1 + Level 2)
+  '/agent/full-analysis':    240000,  // LangGraph pipeline with multiple LLM calls
   '/profile/gap-analysis':   180000,
   '/api/interview-prep':     180000,
   '/api/job-fit-analysis':   150000,
@@ -98,7 +92,7 @@ const _AI_ROUTE_TIMEOUTS = {
 };
 
 async function callBackend(route, payload = {}, method = 'POST') {
-  // Resolve base URL and auth token in parallel — saves one serial round-trip
+  // Resolve base URL and auth token at the same time
   const [base, authToken] = await Promise.all([getApiBase(), _getAuthToken()]);
 
   const headers = { 'Content-Type': 'application/json' };
@@ -112,7 +106,7 @@ async function callBackend(route, payload = {}, method = 'POST') {
     signal: AbortSignal.timeout(timeoutMs),
   });
 
-  // Token expired — clear everything and notify popup
+  // Token is expired - clear auth state and notify the popup
   if (response.status === 401) {
     _clearAuthToken();
     await chrome.storage.sync.remove(['authToken', 'authEmail']);
@@ -120,7 +114,7 @@ async function callBackend(route, payload = {}, method = 'POST') {
     throw new Error('Session expired. Please log in again.');
   }
 
-  // 404 may mean a stale cached URL — re-probe once and retry
+  // A 404 might mean the cached URL is stale - re-probe once and retry
   if (response.status === 404) {
     _cachedBase = null; _cacheTs = 0;
     await chrome.storage.sync.remove('serverUrl');
@@ -154,11 +148,11 @@ async function callBackend(route, payload = {}, method = 'POST') {
 }
 
 async function getBackend(route) {
-  // Reuse callBackend for GET — avoids duplicating token + base logic
+  // Use callBackend for GET to share the same auth and URL logic
   return callBackend(route, {}, 'GET');
 }
 
-// ?? Message listener ??
+// Message listener - handles all messages from popup.js and content scripts
 chrome.runtime.onMessage.addListener((req, _sender, respond) => {
   const handlers = {
     generatePost,
@@ -198,7 +192,7 @@ chrome.runtime.onMessage.addListener((req, _sender, respond) => {
   };
   const fn = handlers[req.action];
   if (fn) {
-    fn(req.data)
+    fn(req.data, _sender)
       .then(r => respond({ success: true, data: r }))
       .catch(e => respond({ success: false, error: e.message }));
     return true;
@@ -225,13 +219,13 @@ async function saveProfileSnapshot(data) {
   return result.data;
 }
 
-// ?? Save LinkedIn profile to user document in Cosmos DB ??
+// Save the scraped LinkedIn profile to the user document in Cosmos DB
 async function saveMyProfile(data) {
   const result = await callBackend('/user/profile', data, 'POST');
   return result.data;
 }
 
-// ?? Get saved LinkedIn profile from Cosmos DB ??
+// Get the saved LinkedIn profile from Cosmos DB
 async function getMyProfile() {
   const base = await getApiBase();
   const { authToken } = await chrome.storage.sync.get(['authToken']);
@@ -243,8 +237,7 @@ async function getMyProfile() {
     },
   });
   if (!resp.ok) return null;
-  // Backend returns { success: true, data: {...} } -- unwrap so the message
-  // handler doesn't double-wrap it into { success: true, data: { success: true, data: {...} } }
+  // Unwrap the backend response to avoid double-wrapping the data field
   const json = await resp.json();
   return json?.data ?? null;
 }
@@ -269,9 +262,9 @@ async function loginUser({ email, password }) {
     throw new Error(body.detail || `Login failed (${res.status})`);
   }
   const { token, email: userEmail } = await res.json();
-  _setAuthToken(token); // prime in-memory cache immediately
+  _setAuthToken(token); // cache the token in memory right away
   await chrome.storage.sync.set({ authToken: token, authEmail: userEmail });
-  // Refresh earned flags from Cosmos immediately, then trigger full sync
+  // Refresh the user's earned flags and trigger a sync
   _refreshSubulDataFromBackend().catch(() => {});
   _triggerSubulSync().catch(() => {});
   return { email: userEmail };
@@ -308,15 +301,14 @@ async function loginWithSubul({ email, password }) {
   const { token, email: userEmail } = await res.json();
   _setAuthToken(token);
   await chrome.storage.sync.set({ authToken: token, authEmail: userEmail });
-  // Refresh earned flags from Cosmos immediately, then trigger full sync
+  // Refresh the user's earned flags and trigger a sync
   _refreshSubulDataFromBackend().catch(() => {});
   _triggerSubulSync().catch(() => {});
   return { email: userEmail };
 }
 
-async function subulTokenDetected({ subul_token, email, name }) {
-  // Called by the Subul content script when it detects a successful login.
-  // Relay the Subul access token to our backend for verification + JWT creation.
+async function subulTokenDetected({ subul_token, email, name }, sender) {
+  // Called by the Subul content script after a successful login
   const base = await getApiBase();
   let lastErr = null;
   let data = null;
@@ -350,51 +342,63 @@ async function subulTokenDetected({ subul_token, email, name }) {
   _setAuthToken(data.token);
   await chrome.storage.sync.set({ authToken: data.token, authEmail: data.email });
 
-  // Notify the popup (if open) so it switches to main view immediately
+  // Tell the popup to switch to the main view if it is open
   chrome.runtime.sendMessage({ action: 'subulLoginSuccess', email: data.email }).catch(() => {});
 
-  // Refresh earned flags from Cosmos immediately, then trigger full sync
+  // The popup is usually closed by the time login completes.
+  // Close the Subul tab and show a notification asking the user to reopen the extension.
+  if (sender && sender.tab && sender.tab.id) {
+    chrome.tabs.remove(sender.tab.id).catch(() => {});
+  }
+  try {
+    chrome.notifications.create('subul_login_success', {
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: 'Connected to Subul IN ✅',
+      message: `Signed in as ${data.email}. Click the extension icon to continue.`,
+      priority: 1,
+    });
+  } catch { /* non-fatal */ }
+
+  // Refresh the user's earned flags and trigger a sync
   _refreshSubulDataFromBackend().catch(() => {});
   _triggerSubulSync().catch(() => {});
 
   return { email: data.email };
 }
 
-// ?? Full rich profile scraper (same as popup.js inlineScrapeFunction) ????????
-// Self-contained: runs inside the LinkedIn profile tab via executeScript.
+// Full profile scraper - runs inside the LinkedIn tab via executeScript.
+// This is the same scraper as inlineScrapeFunction in popup.js.
 async function richProfileScrapeFunction() {
   const _scrapeStart = Date.now();
   try {
     const url = location.href || '';
     const onProfile = /linkedin\.com\/in\//.test(url);
 
-    // ── UTILITIES ──
+    // Utility functions
     const wait = (ms) => new Promise(r => setTimeout(r, ms));
 
-    // ── LAYER 0: JSON-LD structured data ─────────────────────────────────────
-    // LinkedIn embeds a Person schema in <script type="application/ld+json">.
-    // This is stable across React re-renders and class-hash changes — use it
-    // as the primary source for name / headline / photo before any DOM parsing.
+    // Try to get name and headline from LinkedIn's JSON-LD schema first.
+    // This is more stable than DOM parsing across layout changes.
     function extractJsonLdData() {
       try {
         for (const el of document.querySelectorAll('script[type="application/ld+json"]')) {
           let d;
           try { d = JSON.parse(el.textContent); } catch { continue; }
           if (d && d['@type'] === 'Person') return d;
-          // Sometimes it's an array
+          // JSON-LD can be an array
           if (Array.isArray(d)) {
             const person = d.find(x => x && x['@type'] === 'Person');
             if (person) return person;
           }
         }
-      } catch { /* noop — never crash the scraper */ }
+      } catch { /* ignore errors in JSON-LD parsing */ }
       return null;
     }
     const _jsonLd = extractJsonLdData();
 
 
-    // Wait until DOM stops mutating (MutationObserver-based) — much more reliable than fixed delays
-    // Watches childList (structural changes) AND src/data-* attributes for lazy-loaded images.
+    // Wait for the page to stop changing before reading the DOM
     function waitForDomStable(container = document.body, timeoutMs = 3000, settleMs = 300) {
       return new Promise(resolve => {
         let timer, resolved = false;
@@ -407,15 +411,15 @@ async function richProfileScrapeFunction() {
           attributeFilter: ['src', 'data-delayed-url', 'data-ghost-url'],
         });
         timer = setTimeout(done, settleMs);
-        setTimeout(done, timeoutMs); // hard cap
+        setTimeout(done, timeoutMs); // max wait time
       });
     }
 
-    // Resilient query: try multiple selectors in order, return first match
+    // Try each selector in order and return the first match
     const rq = (el, chain) => { for (const s of chain) { const r = el.querySelector(s); if (r) return r; } return null; };
     const rqa = (el, chain) => { for (const s of chain) { const r = el.querySelectorAll(s); if (r.length) return [...r]; } return []; };
 
-    // Track sections that need detail page enrichment (have "Show all" <a> links)
+    // Track sections that have detail pages to visit for more data
     const _sectionsNeedingDetailPage = new Set();
     const _modalSkillCandidates = [];
 
@@ -423,12 +427,10 @@ async function richProfileScrapeFunction() {
       const maxH = () => document.body.scrollHeight;
       const sectionKeywords = /experience|expérience|experiencia|erfahrung|esperienza|experiência|خبرة|education|formation|educación|ausbildung|istruzione|educação|formação|تعليم|skills|compétences|habilidades|kenntnisse|competenze|competências|مهارات|certif|licen|volunteer|bénévolat|voluntariado|ehrenamt|volontariato|voluntariado|تطوع|project|projet|proyecto|projekt|progetto|projeto|مشاريع|language|langue|idioma|sprach|lingua|لغات|honor|award|publication|recommendation|organisation|course|curso|kurs|corso/i;
 
-      // Detect SDUI layout (2025+ LinkedIn) — componentkey attributes present in DOM
+      // Check if this is the newer SDUI layout (LinkedIn 2025+)
       const isSDUI = document.querySelectorAll('div[componentkey]').length > 5;
 
-      // ── SCROLL PASS 1: Progressive scroll until page height stabilizes ──
-      // LinkedIn lazy-loads sections as they enter viewport via IntersectionObserver
-      // SDUI: server-rendered, content mostly in DOM — limit iterations heavily
+      // Scroll down gradually to trigger lazy loading of sections
       let prevH = 0, stableCount = 0, scrollIter = 0;
       const maxScrollIter = isSDUI ? 5 : 14;
       while (stableCount < 2 && scrollIter < maxScrollIter) {
@@ -443,9 +445,7 @@ async function richProfileScrapeFunction() {
         scrollIter++;
       }
 
-      // ── SCROLL PASS 2: Section-targeted scroll ──
-      // Scroll each section to center viewport — triggers section-level lazy loading
-      // SDUI: skip — content is already server-rendered, no IntersectionObserver lazy loading
+      // Scroll to each section to trigger section-level lazy loading (skipped in SDUI)
       if (!isSDUI) {
         for (const sec of document.querySelectorAll('section')) {
           const h = sec.querySelector('h2, h3');
@@ -457,9 +457,7 @@ async function richProfileScrapeFunction() {
         }
       }
 
-      // ── Click all inline "See more" / "Voir plus" buttons to expand collapsed text ──
-      // SDUI: skip — descriptions are read directly from span[data-testid="expandable-text-box"]
-      //       without needing button clicks (we clone + strip the button node in the parsers)
+      // Click "See more" buttons to expand collapsed text (not needed in SDUI)
       const seeMoreRe = /\bsee more\b|\bvoir plus\b|\bvoir la totalit[eé]\b|\blire la suite\b|\bplus d['']infos?\b|\bmehr anzeigen\b|\bver más\b|\bvedi altro\b|\bver mais\b|\bمزيد\b|\bعرض المزيد\b|\bmostrar mais\b/i;
       const showAllRe = /show all|see all|voir (toutes?|tous)|alle anzeigen|ver todo|mostra tutti|ver tudo|mostrar todo|عرض الكل/i;
       if (!isSDUI) {
@@ -479,13 +477,11 @@ async function richProfileScrapeFunction() {
         }
       }
 
-      // ── Click "Show all X ..." elements — BOTH <button> AND <a> ──
-      // For <a> links pointing to /details/ pages: DON'T click (would navigate away)
-      // but mark the section for later detail-page enrichment.
-      // SDUI: only collect /details/ links for enrichment; skip button expansion (SDUI inline content is complete)
+      // Click "Show all" buttons to load more content. For links to /details/ pages,
+      // collect them for later enrichment instead of clicking.
       let expandedSections = false;
       if (isSDUI) {
-        // SDUI fast path: collect /details/ links — filter to known enrichment sections only
+        // In SDUI, collect detail page links for enrichment
         const _KNOWN_DETAIL_SECTIONS = new Set(['skills', 'education', 'experience', 'certifications', 'languages', 'volunteer', 'projects', 'featured', 'honors', 'patents', 'publications', 'courses', 'organizations']);
         for (const a of document.querySelectorAll('a[href*="/details/"]')) {
           const href = a.getAttribute('href') || '';
@@ -523,8 +519,7 @@ async function richProfileScrapeFunction() {
         }
       }
 
-      // ── Handle modal-based skill/section expansion ──
-      // SDUI: skills go to /details/skills/ (already captured above) — no modal used
+      // Click "Show all skills" to open the skills modal (not used in SDUI)
       let skillsModalHandled = false;
       if (!isSDUI) for (const btn of document.querySelectorAll('button')) {
         const label = (btn.getAttribute('aria-label') || btn.textContent || '').toLowerCase();
@@ -536,17 +531,17 @@ async function richProfileScrapeFunction() {
             await wait(100);
             btn.click();
             await wait(500);
-            // Check if a modal opened — skills inside will be picked up by extraction later
+            // Wait for the modal to open
             const modal = document.querySelector('[role="dialog"], .artdeco-modal');
             if (modal) {
-              // Scroll inside modal to load all items
+              // Scroll inside the modal to load all skills
               const scrollContainer = modal.querySelector('.artdeco-modal__content, [class*="modal__content"]') || modal;
               for (let i = 0; i < 4; i++) {
                 scrollContainer.scrollTop = scrollContainer.scrollHeight;
                 await wait(200);
               }
 
-              // Collect visible skill-like texts directly from the modal before closing.
+              // Read skill text from the modal before closing it
               for (const span of modal.querySelectorAll('span[aria-hidden="true"]')) {
                 if (span.closest('button')) continue;
                 const t = (span.textContent || '').trim().replace(/\s+/g, ' ');
@@ -557,7 +552,7 @@ async function richProfileScrapeFunction() {
                 _modalSkillCandidates.push(t);
               }
 
-              // Close modal after content is loaded into DOM
+              // Close the modal after reading the content
               const closeBtn = modal.querySelector('button[aria-label*="Dismiss"], button[aria-label*="Close"], button[aria-label*="Fermer"]');
               if (closeBtn) { closeBtn.click(); await wait(300); }
               skillsModalHandled = true;
@@ -566,8 +561,7 @@ async function richProfileScrapeFunction() {
         }
       }
 
-      // ── Click pagination / "Show more results" / "Load more" buttons ──
-      // SDUI: skip — content is complete after initial render
+      // Click pagination and "Load more" buttons (skipped in SDUI)
       let paginationClicks = 0;
       if (!isSDUI) {
         for (const el of document.querySelectorAll('button, a')) {
@@ -584,7 +578,7 @@ async function richProfileScrapeFunction() {
         }
       }
 
-      // ── SCROLL PASS 3: Post-expansion re-scroll (only if sections were expanded, non-SDUI only) ──
+      // Final scroll pass after expanding sections (non-SDUI only)
       if (!isSDUI && expandedSections) {
         for (let y = 0; y < maxH(); y += 1000) {
           window.scrollTo(0, y);
@@ -601,12 +595,10 @@ async function richProfileScrapeFunction() {
     const normalize = (s) => (s || '').trim().replace(/\s+/g, ' ');
     const parseCount = (raw) => {
       if (!raw) return null;
-      // Normalize: strip all whitespace (including non-breaking spaces \u00A0, \u202F)
-      // and handle European-style separators (1.234 or 1,234 or 4 000)
+      // Normalize number strings and strip whitespace
       let t = raw.toString().trim().toLowerCase().replace(/[\s\u00A0\u202F]+/g, '');
       const hasSuffix = /[km]/.test(t);
-      // If there's a single dot or comma with exactly 3 digits after it and no suffix, it's a thousands sep
-      // e.g., "1.234" → "1234", "1,234" → "1234", but "1.2k" stays as-is
+      // Treat a single dot or comma followed by 3 digits as a thousands separator
       if (!hasSuffix) {
         t = t.replace(/[.,](\d{3})(?!\d)/g, '$1');
       }
@@ -617,7 +609,7 @@ async function richProfileScrapeFunction() {
       if (t.includes('m')) return Math.round(n * 1000000);
       return Math.round(n);
     };
-    // LinkedIn empty-profile placeholder texts and CTA strings that must never be saved as real data
+    // Placeholder strings that LinkedIn shows on empty profiles - must not be saved as real data
     const _LINKEDIN_PLACEHOLDERS = [
       // About / headline placeholders
       /showcase your accomplishments/i,
@@ -692,6 +684,12 @@ async function richProfileScrapeFunction() {
       // Activity feed metadata — post comment/like counts, live stream tags, connection-degree separators
       if (/^live$/i.test(t)) return true;
       if (/^\d+\s*(comments?|likes?|reactions?|shares?|reposts?|views?)/i.test(t)) return true;
+      // Activity feed engagement noise: "and 47 others reacted", "and 3 others liked/commented/reposted"
+      if (/and \d+ others? (reacted|liked|commented|reposted)/i.test(t)) return true;
+      // Translation prompt that appears in feed posts
+      if (/^show translation$/i.test(t)) return true;
+      // Standalone repost count labels
+      if (/^\d+ repost(s)?$/i.test(t)) return true;
       // LinkedIn name•degree separator pattern: "Jihed Ayari • You", "Name • 1st", "Name • 2nd"
       if (/ • (you|1st|2nd|3rd|\d+(st|nd|rd|th)?)$/i.test(t)) return true;
       return false;
@@ -972,6 +970,27 @@ async function richProfileScrapeFunction() {
     }
 
     // ── SECTION FINDER ───────────────────────────────────────
+    // Guard: returns true when `el` is the Activity / Posts feed section.
+    const isActivityFeedSection = (el) => {
+      if (!el) return false;
+      // 1. data-view-name / aria-label attributes
+      const dvn = (el.getAttribute('data-view-name') || '').toLowerCase();
+      if (/feed|activity|posts/.test(dvn)) return true;
+      const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+      if (/activity|posts/.test(ariaLabel)) return true;
+      // 2. Any /details/ link? Then it's a real profile section, not feed
+      if (el.querySelector('a[href*="/details/"]')) return false;
+      // 3. Does it contain pvs-entity items? Real profile section, not feed
+      if (el.querySelector('[class*="pvs-entity"], li[class*="artdeco"], li[data-view-name]')) return false;
+      // 4. Engagement noise density — even 1 hit means it's probably feed
+      const sample = el.textContent.substring(0, 3000);
+      const noiseHits = (sample.match(/\b(reacted|repost(ed|s)?|commented|liked|comment(s)?|reaction(s)?|and \d+ others?)\b/gi) || []).length;
+      if (noiseHits >= 1) return true;
+      // 5. Feed post fingerprints: carousel position indicators
+      if (/\b\d+\/\d+\b/.test(sample)) return true;
+      return false;
+    };
+
     function findSection(keywords) {
       const kwLow = keywords.map(k => k.toLowerCase().trim());
 
@@ -980,6 +999,7 @@ async function richProfileScrapeFunction() {
       // with an h2 heading. We check the heading text (not the full section textContent,
       // which could match noise like post text containing "experience").
       for (const sec of document.querySelectorAll('section')) {
+        if (isActivityFeedSection(sec)) continue; // ← never return the Activity/Posts feed
         for (const heading of sec.querySelectorAll(':scope > div h2, :scope > div h3, :scope > header h2')) {
           const ht = heading.textContent.trim().toLowerCase().replace(/\s+/g, ' ');
           if (kwLow.some(k => ht === k || ht.startsWith(k) || ht.includes(k))) return sec;
@@ -994,8 +1014,12 @@ async function richProfileScrapeFunction() {
                     document.querySelector(`[data-view-name*="${safeKw}" i]`) ||
                     document.getElementById(safeKw);
         if (hit) {
+          if (isActivityFeedSection(hit)) continue; // ← skip feed matches
           const sec = hit.closest('section');
-          if (sec) return sec;
+          if (sec) {
+            if (isActivityFeedSection(sec)) continue;
+            return sec;
+          }
           return hit;
         }
       }
@@ -1003,6 +1027,7 @@ async function richProfileScrapeFunction() {
       // Strategy 3: first 120 chars of section textContent (catches hashed-class layouts
       // where heading text is not in h2/h3 but is the first visible text in the section)
       for (const sec of document.querySelectorAll('section')) {
+        if (isActivityFeedSection(sec)) continue; // ← skip Activity/Posts feed
         const first120 = sec.textContent.trim().substring(0, 120).toLowerCase();
         if (kwLow.some(k => first120.includes(k))) return sec;
       }
@@ -1010,6 +1035,7 @@ async function richProfileScrapeFunction() {
       // Strategy 4: any heading or aria-hidden span inside artdeco-card containers
       const containers = [...document.querySelectorAll('section'), ...document.querySelectorAll('[class*="artdeco-card"]')];
       for (const container of containers) {
+        if (isActivityFeedSection(container)) continue; // ← skip Activity/Posts feed
         for (const el of container.querySelectorAll('h2, h3, span[aria-hidden="true"]')) {
           if (el.closest('li')) continue;
           const et = el.textContent.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -1018,7 +1044,11 @@ async function richProfileScrapeFunction() {
         }
       }
 
-      // Strategy 5: TreeWalker fallback (hashed layout where nothing else works)
+      // Strategy 5: TreeWalker fallback (hashed layout where nothing else works).
+      // Extra guard: the candidate container must contain actual profile list items
+      // (li or pvs-entity elements) — not just any element that mentions the keyword.
+      // This prevents the Activity/Posts feed (which has no pvs-entity structure)
+      // from being mistaken for Experience / Education / Skills.
       const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
       while (tw.nextNode()) {
         const node = tw.currentNode;
@@ -1029,7 +1059,12 @@ async function richProfileScrapeFunction() {
         let el = par.parentElement;
         for (let depth = 0; depth < 12 && el && el !== document.body; depth++, el = el.parentElement) {
           if (depth < 1) continue;
-          if (el.querySelector('li') || el.querySelector('[class*="pvs-entity"]')) return el;
+          // Must contain pvs-entity or li items that look like profile entries
+          const hasPvsEntity = el.querySelector('[class*="pvs-entity"]');
+          const hasProfileLi = el.querySelector('li[class*="artdeco"], li[class*="pvs"], li[data-view-name]');
+          if (!hasPvsEntity && !hasProfileLi) continue;
+          if (isActivityFeedSection(el)) continue; // ← never return the feed
+          return el;
         }
       }
       return null;
@@ -1513,7 +1548,15 @@ async function richProfileScrapeFunction() {
             }
           }
 
-          if ((entry.title || entry.company) && !isUiNoise(entry.title) && !isUiNoise(entry.company)) {
+          // Reject entries that look like Activity feed posts (no real title/company,
+          // or description is a long post narrative rather than a job description).
+          const looksLikeFeedPost = (
+            !entry.title && !entry.company
+          ) || (
+            entry.description && entry.description.length > 120 &&
+            /\b(reacted|reposted|commented|followers?|connections?|hashtag|#\w+)\b/i.test(entry.description)
+          );
+          if ((entry.title || entry.company) && !isUiNoise(entry.title) && !isUiNoise(entry.company) && !looksLikeFeedPost) {
             const key = (entry.title + entry.company).toLowerCase();
             if (!experience.some(r => (r.title + r.company).toLowerCase() === key)) {
               experience.push(entry);
@@ -1525,6 +1568,10 @@ async function richProfileScrapeFunction() {
 
       // Strategy 2: hashed class / section text fallback
       if (experience.length === 0) {
+        // Bail out if expSec turned out to be the Activity feed (no real experience items)
+        if (expSec && isActivityFeedSection(expSec)) {
+          console.warn('[ProfileScrape] expSec looks like Activity feed — skipping Strategy 2 fallback');
+        } else {
         let texts = rqa(expSec, ['p.f6996daa', '.text-body-medium', '[class*="text-body-medium"]']).map(p => p.textContent.trim()).filter(t => t.length > 1);
         if (texts.length === 0) {
           texts = (expSec.innerText || '').split('\n').map(t => t.trim()).filter(Boolean);
@@ -1575,7 +1622,9 @@ async function richProfileScrapeFunction() {
 
           } else if (text.length > 60 && current.title && current.company) {
             // Long text after title+company → description
-            current.description = current.description
+            // Skip if it looks like an Activity feed post narrative
+            if (/\b(reacted|reposted|#\w{3,}|followers?|connections?)/i.test(text)) { /* skip feed text */ }
+            else current.description = current.description
               ? current.description + ' ' + text
               : text;
 
@@ -1609,6 +1658,7 @@ async function richProfileScrapeFunction() {
             description: current.description || '',
           });
         }
+        } // end else (not activity feed)
       }
     }
     } catch (e) { console.warn('[LinkedIn AI] Experience section error:', e); }
@@ -1785,6 +1835,12 @@ async function richProfileScrapeFunction() {
       if (isUiNoise(t)) return true;
       if (/\d{4}|endors|recommand|see more|voir plus|show all|voir tout/i.test(t)) return true;
       if (/and \+\d+ skills?/i.test(t)) return true;
+      // Activity feed reaction strings: "HASSAN JAHA and 92 others reacted", "Name and 3 others liked"
+      if (/\band \d+ others? (reacted|liked|commented|reposted)/i.test(t)) return true;
+      // Standalone engagement-count strings leaking from feed
+      if (/\b\d+\s*(reactions?|comments?|reposts?|likes?|shares?)\b/i.test(t)) return true;
+      // Image/slide position indicators from feed carousels: "1/5", "1/12"
+      if (/^\d+\/\d+$/.test(t.trim())) return true;
       // Filter experience-like entries (e.g. "Engineer at Google") but NOT short skill names containing "at"
       if ((t.includes(' at ') || t.includes(' @ ')) && t.length > 30) return true;
       // School names, degrees

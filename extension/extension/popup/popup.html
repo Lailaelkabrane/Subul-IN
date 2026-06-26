@@ -291,6 +291,7 @@
       <input type="email"    id="subulEmail"    class="auth-input" placeholder="Subul email" autocomplete="email" />
       <input type="password" id="subulPassword" class="auth-input" placeholder="Subul password" autocomplete="current-password" />
       <button type="button" id="subulSubmitBtn">Connect with Subul</button>
+      <button type="button" id="subulAutoLoginBtn" class="auth-link-btn" style="background:none;border:none;color:var(--ac);font-size:11px;text-decoration:underline;cursor:pointer;display:block;margin:8px auto 0;">Or sign in on app.subul.uk instead</button>
       <button type="button" id="subulBackBtn" class="auth-back-btn">Back</button>
     </div>
   </div>
@@ -537,6 +538,7 @@
               <span class="score-card-title">Profile Strength</span>
               <span class="score-card-hint">Instant</span>
             </div>
+            <div class="score-card-subtitle" id="scoreCardSubtitle" style="font-size:11px;color:var(--tx3);margin:-6px 0 10px;line-height:1.5;"></div>
             <div class="score-panel" id="scoreBeforePanel">
               <div class="score-header">
                 <div class="score-header-left">
@@ -581,7 +583,7 @@
           <div class="empty-state" id="aiDeepEmptyState">
             <div class="empty-state-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
             <div class="empty-state-title">AI-Powered Deep Analysis</div>
-            <div class="empty-state-desc">Get a comprehensive AI evaluation of your profile with personalized recommendations, grade breakdown, and actionable improvements.<br><small style="color:var(--tx3);margin-top:4px;display:block;">Requires your profile to be extracted first. Grade scale: A = Exceptional (90-100) &middot; B = Strong (75-89) &middot; C = Average (60-74) &middot; D = Needs Work (&lt;60)</small></div>
+            <div class="empty-state-desc">Get a comprehensive AI evaluation of your profile with personalized recommendations, grade breakdown, and actionable improvements.<br><small style="color:var(--tx3);margin-top:4px;display:block;">Requires your profile to be extracted first. Grade scale: A+ = 90-100 &middot; A = 75-89 &middot; B = 60-74 &middot; C = 45-59 &middot; D = 30-44 &middot; F = &lt;30</small><small style="color:var(--tx3);margin-top:6px;display:block;">This is a stricter, AI-judged quality score — different from the instant "Profile Strength" score on the Score tab, which checks completeness only. A lower score here is normal and reflects content quality, not a worse profile.</small></div>
           </div>
           <button type="button" id="aiScoreBtn" class="btn-ai-score">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
@@ -839,8 +841,7 @@
         <!-- Persistent mode tabs — always visible after consent, above all content -->
         <div id="gapModeTabs" class="gap-mode-tabs-bar" style="display:none;">
           <button type="button" class="gap-mode-tab active" id="gapModeProfile" data-mode="profile">vs. Profile</button>
-          <button type="button" class="gap-mode-tab" id="gapModeJD" data-mode="jd">vs. Job Text</button>
-          <button type="button" class="gap-mode-tab" id="gapModeJob" data-mode="job">Job Fit</button>
+          <button type="button" class="gap-mode-tab" id="gapModeJob" data-mode="job">vs. Job</button>
         </div>
 
         <!-- Idle setup area (hidden when result is showing) -->
@@ -853,7 +854,7 @@
           </div>
 
           <!-- JD text paste mode -->
-          <div id="gapModeJDPanel" style="display:none;">
+          <div id="gapModeJDPanel" style="display:none!important;">
             <div class="gap-idle-hint">Paste a job description below to see how your profile measures up.</div>
             <textarea id="gapJDInput" class="gap-jd-textarea" placeholder="Paste job description here..." rows="6"></textarea>
             <input type="text" id="gapJDRole" class="gap-jd-role" placeholder="Job title (optional)" />
@@ -943,7 +944,13 @@
 
           <!-- Power Metrics (Radar-style bars) -->
           <div class="gap-power-metrics" id="gapPowerMetrics" style="display:none">
-            <div class="gap-section-title">Power Index <span class="gap-power-legend-inline"><span class="gap-legend-you-dot"></span><span class="gap-legend-you-lbl">You</span><span class="gap-legend-them-dot"></span><span class="gap-legend-them-lbl">Them</span></span></div>
+            <div class="gap-power-index-header">
+              <div class="gap-section-title">Power Index</div>
+              <div class="gap-power-legend-inline">
+                <span class="gap-legend-you-dot"></span><span class="gap-legend-you-lbl">You</span>
+                <span class="gap-legend-them-dot"></span><span class="gap-legend-them-lbl">Them</span>
+              </div>
+            </div>
             <div class="gap-power-subtitle">How your profile stacks up across 5 dimensions (0–100)</div>
             <div class="gap-power-grid">
               <div class="gap-power-row">
@@ -1060,18 +1067,9 @@
                 <div class="gap-bar-track gap-bar-track-right"><div class="gap-bar-fill gap-bar-them" id="gapBarThemSKFill"></div></div>
                 <span class="gap-bar-val gap-bar-them-val" id="gapBarThemSK">0</span>
               </div></div>
-              <div class="gap-compare-detail"><div class="gap-compare-gap" id="gapSKGap"></div><div class="gap-pills" id="gapSkillsMissing"></div><div class="gap-pills gap-pills-green" id="gapSkillsAdv"></div><div class="gap-compare-insight" id="gapSKPositioning"></div></div>
+              <div class="gap-compare-detail"><div class="gap-compare-gap" id="gapSKGap"></div><div class="gap-compare-insight" id="gapSKInsight"></div><div class="gap-pills" id="gapSkillsMissing"></div><div class="gap-pills gap-pills-green" id="gapSkillsAdv"></div><div class="gap-compare-insight" id="gapSKPositioning"></div></div>
             </div>
-            <div class="gap-compare-row" data-section="content">
-              <div class="gap-compare-label">Content</div>
-              <div class="gap-compare-bars"><div class="gap-bar-pair">
-                <span class="gap-bar-val gap-bar-you-val" id="gapBarYouCT">0</span>
-                <div class="gap-bar-track"><div class="gap-bar-fill gap-bar-you" id="gapBarYouCTFill"></div></div>
-                <div class="gap-bar-track gap-bar-track-right"><div class="gap-bar-fill gap-bar-them" id="gapBarThemCTFill"></div></div>
-                <span class="gap-bar-val gap-bar-them-val" id="gapBarThemCT">0</span>
-              </div></div>
-              <div class="gap-compare-detail"><div class="gap-compare-gap" id="gapCTAdvice"></div><div class="gap-compare-insight" id="gapCTStrategy"></div></div>
-            </div>
+
           </div>
 
           <!-- Skill Gap Heatmap -->
@@ -1080,13 +1078,7 @@
             <div id="gapSkillHeatmapGrid"></div>
           </div>
 
-          <!-- Quick Wins -->
-          <div class="gap-section gap-section-wins">
-            <div class="gap-section-title">Quick Wins</div>
-            <div id="gapQuickWins"></div>
-          </div>
 
-          <!-- Recruiter Perspective -->
           <div class="gap-recruiter" id="gapRecruiter" style="display:none">
             <div class="gap-section-title">Recruiter's Take</div>
             <div class="gap-recruiter-text" id="gapRecruiterText"></div>
@@ -1113,16 +1105,14 @@
             </div>
           </div>
 
-          <!-- 90-Day Roadmap -->
+          <!-- 30-Day Roadmap -->
           <div class="gap-section" id="gapRoadmap" style="display:none"></div>
 
           <!-- Actions -->
           <div class="gap-export-row">
             <div class="cache-tag" id="gapCacheTag" style="display:none">Cached result</div>
-            <button type="button" class="btn-sm gap-summary-toggle" id="gapSummaryToggle">Summary only</button>
-            <button type="button" class="btn-sm gap-pdf-btn" id="gapPdfBtn">Print / PDF</button>
-            <button type="button" class="export-btn" id="gapExportBtn">Download Report</button>
-            <button type="button" class="btn-sm gap-reset-btn" id="gapResetBtn">Analyze Another</button>
+            <button type="button" class="export-btn" id="gapExportBtn">Export as PDF</button>
+            <button type="button" class="btn-primary gap-reset-btn gap-reset-prominent" id="gapResetBtn">Analyze Another</button>
           </div>
         </div>
 
@@ -1228,6 +1218,10 @@
         </button>
         <span class="page-title">AI Assistant</span>
         <div class="page-header-right">
+          <button type="button" class="chat-newchat-btn" id="chatNewBtn" title="Start a new chat and clear history">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+            New Chat
+          </button>
           <button type="button" class="chat-guide-btn" id="chatGuideBtn" title="How to use the assistant">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             Guide
@@ -1554,9 +1548,9 @@
           <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
         </svg>
       </div>
-      <div class="ewm-title" data-i18n="ewmTitle">Before we extract your profile</div>
+      <div class="ewm-title" data-i18n="ewmTitle">Before we extract the profile</div>
       <ol class="ewm-steps">
-        <li><span class="ewm-step-num">1</span><span>Switch to your LinkedIn tab and <strong>scroll all the way to the bottom</strong> of your profile page so all sections are fully loaded.</span></li>
+        <li><span class="ewm-step-num">1</span><span>Switch to your LinkedIn tab and <strong>scroll all the way to the bottom</strong> of the profile page so all sections are fully loaded.</span></li>
         <li><span class="ewm-step-num">2</span><span>Come back here and click <strong>"Start Extraction"</strong>.</span></li>
         <li class="ewm-warn"><span class="ewm-step-num ewm-step-warn">3</span><span><strong>Do NOT</strong> switch tabs or scroll during extraction — it may interrupt the process.</span></li>
       </ol>
@@ -1564,7 +1558,7 @@
       <div class="ewm-privacy-banner">
         <div class="ewm-privacy-row">
           <svg class="ewm-privacy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <span>Your data stays <strong>on your device</strong> — we never sell or share it</span>
+          <span>The data stays <strong>on your device</strong> — we never sell or share it</span>
         </div>
         <div class="ewm-privacy-row">
           <svg class="ewm-privacy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>

@@ -1,26 +1,18 @@
-// ═══════════════════════════════════════════════════════════════
-// CONTENT SCRIPT V3 — Lightweight
-//
-// Only handles:
-//   1. insertPost  — paste generated text into LinkedIn editor
-//   2. ping        — confirm content script is loaded
-//
-// Profile scraping is now done via chrome.scripting.executeScript
-// directly from popup.js (no message passing needed).
-// ═══════════════════════════════════════════════════════════════
+// Content script - handles inserting posts into LinkedIn and responding to ping messages.
+// Profile scraping is done directly from popup.js via executeScript.
 
 (function () {
   'use strict';
 
   const TAG = '[LIAI]';
 
-  // Remove any previous listener (allows clean re-injection after extension reload)
+  // Remove the old listener if the extension was reloaded
   if (window.__liaiV3Listener) {
     try { chrome.runtime.onMessage.removeListener(window.__liaiV3Listener); } catch { /* noop */ }
   }
 
   function messageHandler(req, _sender, respond) {
-    // Guard: extension context still valid?
+    // Check if the extension context is still valid
     try { chrome.runtime.getURL(''); } catch {
       return false;
     }
@@ -40,9 +32,7 @@
   chrome.runtime.onMessage.addListener(messageHandler);
   window.__liaiV3Listener = messageHandler;
 
-  // ── SMART RESCRAPE TRIGGER ──
-  // Watches for navigation to the user's own LinkedIn profile URL and notifies
-  // the background so the popup can trigger a rescrape automatically.
+  // Watch for navigation to the user's own profile and notify the background
   if (!window.__liaiRescrapeObserver) {
     let _lastHref = location.href;
 
@@ -64,16 +54,16 @@
       });
     }
 
-    // LinkedIn is a SPA — observe pushState/replaceState via MutationObserver on title
+    // LinkedIn is a single-page app, so watch the title for URL changes
     const _titleObs = new MutationObserver(_checkForOwnProfileNavigation);
     _titleObs.observe(document.querySelector('title') || document.head, { subtree: true, childList: true, characterData: true });
     window.__liaiRescrapeObserver = _titleObs;
 
-    // Also catch popstate
+    // Also handle browser back/forward navigation
     window.addEventListener('popstate', _checkForOwnProfileNavigation);
   }
 
-  // ── INSERT POST ──
+  // Insert generated text into the LinkedIn post editor
   function insertPost(text) {
     const editor = document.querySelector(
       '[contenteditable="true"][role="textbox"], ' +
@@ -86,7 +76,7 @@
       return;
     }
 
-    // Try clicking "Start a post" button
+    // If no editor is open, try clicking the "Start a post" button
     for (const btn of document.querySelectorAll('button')) {
       if (/start a post|commencer.*post/i.test(
         (btn.textContent || '') + (btn.getAttribute('aria-label') || '')

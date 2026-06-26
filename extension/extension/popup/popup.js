@@ -1,6 +1,4 @@
-// ═══════════════════════════════════════════════════════════════
-// POPUP V4 — Multi-Page Design (Violet Theme)
-// ═══════════════════════════════════════════════════════════════
+// Main popup script - handles all UI interactions and feature calls
 
 let profile = null;
 let _currentPage = 'home';
@@ -8,9 +6,7 @@ let _pageStack = ['home']; // navigation history for proper back navigation
 let _isEnriching = false;  // true while background enrichment is running — suppresses status overwrite
 let _consentReady = false;
 
-// Bump this whenever the Privacy Policy / Terms change materially. When the
-// stored consent version differs from this, the consent overlay is shown
-// again and the user must re-accept before using the extension.
+// Increment this when the privacy policy or terms change so users must re-accept
 const CURRENT_PRIVACY_VERSION = '3.2.0';
 const CONSENT_KEY = 'subulConsent';
 
@@ -52,8 +48,7 @@ function initConsentOverlay(onAccepted) {
     if (typeof onAccepted === 'function') onAccepted();
   };
 
-  // A stored record is valid only if it was accepted against the CURRENT policy
-  // version. Older records (or the legacy boolean flag) trigger re-consent.
+  // Consent is only valid if it matches the current policy version
   const isConsentCurrent = (rec) =>
     !!rec && rec.privacyAccepted === true && rec.termsAccepted === true &&
     rec.privacyVersion === CURRENT_PRIVACY_VERSION;
@@ -81,7 +76,7 @@ function initConsentOverlay(onAccepted) {
         termsAccepted: true,
         termsAcceptedAt: now,
       },
-      // Keep the legacy flag in sync so any older code paths still see consent.
+      // Keep the legacy consent flag in sync
       subulConsentAccepted: true,
     });
     finish();
@@ -94,7 +89,7 @@ function initConsentOverlay(onAccepted) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Mark user as active on every popup open — resets inactivity reminder timer
+  // Record that the user opened the popup to reset the inactivity reminder
   chrome.runtime.sendMessage({ action: 'markUserActive' }).catch(() => {});
 
   initConsentOverlay(() => {
@@ -120,12 +115,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-// ══════════════════════════════════════
-//  MULTI-PAGE NAVIGATION
-// ══════════════════════════════════════
+// Page navigation
 
-// Track any pending transitionend cleanup so we can cancel it before it fires
-// on a page that's about to become active again (causes jank).
+// Track pending animation cleanup so we can cancel it on fast navigation
 const _pendingCleanup = new Map(); // pageId -> cleanup fn
 
 function navigateTo(pageId, _isBack = false) {
@@ -136,8 +128,7 @@ function navigateTo(pageId, _isBack = false) {
 
   const currentId = _currentPage;
 
-  // Cancel any pending exit-left cleanup on the target page before touching it
-  // (prevents removing exit-left mid-animation when quickly navigating back)
+  // Cancel any pending cleanup on the target page to prevent animation glitches
   if (_pendingCleanup.has(pageId)) {
     const fn = _pendingCleanup.get(pageId);
     target.removeEventListener('transitionend', fn);
@@ -145,33 +136,32 @@ function navigateTo(pageId, _isBack = false) {
     target.classList.remove('exit-left'); // ensure clean state
   }
 
-  // Determine direction
+  // Decide whether to slide left (forward) or right (back)
   const previousPage = _pageStack.length > 1 ? _pageStack[_pageStack.length - 2] : null;
   const goingBack = _isBack || pageId === previousPage;
 
   if (goingBack) {
-    // Slide current page away to the right (no exit-left — just remove active)
+    // Slide the current page to the right when going back
     current.classList.remove('active');
-    // Bring target back from exit-left position
+    // Bring the target page back from the left
     target.classList.remove('exit-left');
     target.classList.add('active');
-    // Keep stack consistent when navigating back without calling goBack()
+    // Update the stack when going back directly without using goBack()
     if (!_isBack && _pageStack.length > 1 && _pageStack[_pageStack.length - 1] === currentId) {
       _pageStack.pop();
     }
     if (pageId === 'home') _refreshHomeHero();
   } else {
-    // Slide current page out to the left
+    // Slide the current page out to the left when going forward
     current.classList.remove('active');
     current.classList.add('exit-left');
 
-    // Schedule cleanup of exit-left AFTER the CSS transition (280ms + buffer)
-    // Store the timeout id so we can cancel it if the user navigates back fast
+    // Clean up exit-left class after the transition finishes
     const cleanup = () => {
       current.classList.remove('exit-left');
       _pendingCleanup.delete(currentId);
     };
-    // Use both transitionend and a fallback timeout (in case transitionend misfires)
+    // Use transitionend and a fallback timeout in case the event does not fire
     const timeoutId = setTimeout(cleanup, 350);
     const transitionCleanup = () => {
       clearTimeout(timeoutId);
@@ -181,8 +171,7 @@ function navigateTo(pageId, _isBack = false) {
     current.addEventListener('transitionend', transitionCleanup, { once: true });
     _pendingCleanup.set(currentId, transitionCleanup);
 
-    // Slide target in — use requestAnimationFrame so the browser has painted
-    // the exit-left state before adding active, preventing the collapsed/flash glitch
+    // Slide the target page in using requestAnimationFrame to avoid a flash
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         target.classList.add('active');
@@ -191,7 +180,7 @@ function navigateTo(pageId, _isBack = false) {
 
     if (pageId === 'gap' && typeof onGapTabOpen === 'function') onGapTabOpen();
     if (pageId === 'networking' && typeof onNetworkingTabOpen === 'function') onNetworkingTabOpen();
-    // Push to stack when navigating forward
+    // Track forward navigation in the stack
     if (_pageStack[_pageStack.length - 1] !== pageId) _pageStack.push(pageId);
   }
 
@@ -202,7 +191,7 @@ function navigateTo(pageId, _isBack = false) {
 }
 
 function goBack() {
-  // Pop current page from stack
+  // Remove the current page from the stack
   if (_pageStack.length > 1) _pageStack.pop();
   const prev = _pageStack[_pageStack.length - 1] || 'home';
   navigateTo(prev, true);
@@ -214,18 +203,18 @@ async function _refreshHomeHero() {
   if (saved && (saved.name || saved.headline)) {
     profile = saved;
     updateHomeProfile(saved);
-    // Also make sure profile card state is 'data' (not loading/edit)
+    // Reset the profile card to data view when going back home
     showState('data');
   }
 }
 
 function initNavigation() {
-  // Feature card clicks on home page
+  // Handle feature card clicks on the home page
   document.querySelectorAll('[data-nav]').forEach(el => {
     el.addEventListener('click', (e) => {
       e.preventDefault();
       const target = el.dataset.nav;
-      // Back buttons (btn-back class) use goBack() for proper stack navigation
+      // Back buttons use goBack() for proper history tracking
       if (el.classList.contains('btn-back')) {
         goBack();
       } else {
@@ -234,7 +223,7 @@ function initNavigation() {
     });
   });
 
-  // Sub-tabs (Profile page) — click + keyboard nav (arrow keys)
+  // Sub-tab navigation on the Profile page (supports arrow key navigation)
   const subTabs = [...document.querySelectorAll('.sub-tab')];
   subTabs.forEach((tab, i) => {
     tab.setAttribute('role', 'tab');
@@ -258,7 +247,7 @@ function initNavigation() {
     });
   });
 
-  // Home edit button → navigate to edit page
+  // Navigate to the edit page when the home edit button is clicked
   const homeEditBtn = document.getElementById('homeEditBtn');
   if (homeEditBtn) {
     homeEditBtn.addEventListener('click', async (e) => {
@@ -273,7 +262,7 @@ function initNavigation() {
     });
   }
 
-  // Home avatar photo change button
+  // Handle profile photo upload
   const avatarChangeBtn = document.getElementById('homeAvatarChangeBtn');
   const avatarFileInput = document.getElementById('homeAvatarFileInput');
   if (avatarChangeBtn && avatarFileInput) {
@@ -284,7 +273,7 @@ function initNavigation() {
     avatarFileInput.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      // Convert to data URL and save
+      // Read the file and save it as a data URL
       const reader = new FileReader();
       reader.onload = async () => {
         const dataUrl = reader.result;
@@ -295,7 +284,7 @@ function initNavigation() {
         }
         await chrome.storage.local.set({ myProfile: profile });
         updateHomeProfile(profile);
-        // Also update profile card avatar if visible
+        // Update the profile card avatar if it is currently showing
         const pcAvatar = document.getElementById('pcAvatar');
         if (pcAvatar) {
           pcAvatar.textContent = '';
@@ -307,12 +296,12 @@ function initNavigation() {
         toast('Photo updated!', 'success');
       };
       reader.readAsDataURL(file);
-      // Reset input so same file can be re-selected
+      // Clear the input so the same file can be selected again
       avatarFileInput.value = '';
     });
   }
 
-  // Settings: edit profile → navigate to edit page
+  // Navigate to edit page from the settings screen
   const settingsEditBtn = document.getElementById('settingsEditProfile');
   if (settingsEditBtn) {
     settingsEditBtn.addEventListener('click', async (e) => {
@@ -328,7 +317,7 @@ function initNavigation() {
   }
 }
 
-// Build curved custom dropdowns so the opened list matches popup design.
+// Custom dropdown builder to match the popup design
 function initCustomSelects() {
   const selects = Array.from(document.querySelectorAll('.form-group select, #netSeniority'));
   if (!selects.length) return;
@@ -401,7 +390,7 @@ function initCustomSelects() {
       syncOpenState();
     });
 
-    // Keep custom UI in sync when code updates select value.
+    // Keep the custom dropdown in sync when the value changes programmatically
     select.addEventListener('change', () => {
       const selectedText = select.options[select.selectedIndex]?.text || 'Select';
       triggerLabel.textContent = selectedText;
@@ -416,19 +405,19 @@ function initCustomSelects() {
   }
 
   document.addEventListener('click', closeAll);
-  // Close fixed-position dropdowns on scroll so they don't float detached
+  // Close dropdowns when the user scrolls so they don't float out of position
   document.querySelectorAll('.page-body').forEach(pb => {
     pb.addEventListener('scroll', closeAll, { passive: true });
   });
 }
 
-// Check if a URL is valid for loading images (must be absolute http/https or data URI)
+// Check if a URL can be used as an image src
 function _isValidImageUrl(url) {
   if (!url || typeof url !== 'string') return false;
   return /^(https?:\/\/|data:image\/)/.test(url.trim());
 }
 
-// Compute profile completeness score (0-100) from stored profile data
+// Calculate how complete the user's profile is (0 to 100)
 function computeCompletenessScore(p) {
   if (!p) return { score: 0, breakdown: [] };
   const aboutLen    = (p.about || '').length;
@@ -502,12 +491,12 @@ function _renderCompletenessScore(p) {
   scoreEl.textContent = score + '%';
   ringFill.setAttribute('stroke-dasharray', `${dash} ${circumference - dash}`);
 
-  // Colour the ring based on score
+  // Set the ring color based on the score
   if (score >= 80) ringFill.style.stroke = '#22c55e';
   else if (score >= 50) ringFill.style.stroke = 'var(--ac, #0077b5)';
   else ringFill.style.stroke = '#f59e0b';
 
-  // Build breakdown HTML (hidden until clicked)
+  // Build the score breakdown panel
   bdEl.innerHTML = breakdown.map(i => {
     const icon = i.earned ? '✓' : '○';
     const cls  = i.earned ? 'cb-check' : 'cb-miss';
@@ -518,7 +507,7 @@ function _renderCompletenessScore(p) {
     return `<div class="cb-row"><span><span class="${cls}">${icon}</span>${i.label}${hint}</span><span>${pts}/${i.points}</span></div>`;
   }).join('');
 
-  // Toggle breakdown on click (one listener only)
+  // Show or hide the breakdown when clicked
   if (!wrap._completenessListenerAdded) {
     wrap._completenessListenerAdded = true;
     wrap.addEventListener('click', () => {
@@ -527,7 +516,7 @@ function _renderCompletenessScore(p) {
   }
 }
 
-// Sync home page profile hero with extracted profile data
+// Update the home page profile section with the latest scraped data
 function updateHomeProfile(p) {
   if (!p) return;
   const nameEl = document.getElementById('homeName');
@@ -542,15 +531,15 @@ function updateHomeProfile(p) {
       const _img = avatarEl.querySelector('img');
       if (_img) _img.onerror = () => { avatarEl.innerHTML = _noPhotoSVG; };
     } else {
-      // No profile photo — show standard grey silhouette
+      // Show a placeholder avatar when no photo is available
       avatarEl.innerHTML = _noPhotoSVG;
     }
   }
-  // Profile completeness ring
+  // Update the completeness ring
   _renderCompletenessScore(p);
-  // Show extraction status
+  // Update the extraction status text
   updateExtractionStatus(p);
-  // Keep settings profile card in sync with latest saved/scraped profile.
+  // Update the settings profile card with the latest data
   syncSettingsProfileInfo(p);
 }
 
@@ -643,7 +632,7 @@ function showExtractingStatus() {
   textEl.textContent = window._t('statusExtracting');
 }
 
-// Shows a brief "done" flash, then settles into normal status display
+// Show a short success flash then return to normal status
 function showExtractionDone(p) {
   const statusEl = document.getElementById('homeExtractStatus');
   const dotEl = document.getElementById('homeExtractDot');
@@ -663,11 +652,7 @@ function showExtractionDone(p) {
 
 
 
-// ══════════════════════════════════════
-//  INLINE SCRAPE FUNCTION
-//  Injected into LinkedIn tab via executeScript
-//  Uses hashed class detection + section text matching
-// ══════════════════════════════════════
+// Profile scraper - injected into the LinkedIn tab via executeScript
 
 async function inlineScrapeFunction() {
   const _scrapeStart = Date.now();
@@ -675,13 +660,10 @@ async function inlineScrapeFunction() {
     const url = location.href || '';
     const onProfile = /linkedin\.com\/in\//.test(url);
 
-    // ── UTILITIES ──
+    // Utility functions
     const wait = (ms) => new Promise(r => setTimeout(r, ms));
 
-    // ── LAYER 0: JSON-LD structured data ─────────────────────────────────────
-    // LinkedIn embeds a Person schema in <script type="application/ld+json">.
-    // This is stable across React re-renders and class-hash changes — use it
-    // as the primary source for name / headline / photo before any DOM parsing.
+    // Try to get name and headline from LinkedIn's JSON-LD schema first
     function extractJsonLdData() {
       try {
         for (const el of document.querySelectorAll('script[type="application/ld+json"]')) {
@@ -700,8 +682,7 @@ async function inlineScrapeFunction() {
     const _jsonLd = extractJsonLdData();
 
 
-    // Wait until DOM stops mutating (MutationObserver-based) — much more reliable than fixed delays
-    // Watches childList (structural changes) AND src/data-* attributes for lazy-loaded images.
+    // Wait for the page to finish loading before reading the DOM
     function waitForDomStable(container = document.body, timeoutMs = 3000, settleMs = 300) {
       return new Promise(resolve => {
         let timer, resolved = false;
@@ -718,11 +699,11 @@ async function inlineScrapeFunction() {
       });
     }
 
-    // Resilient query: try multiple selectors in order, return first match
+    // Try each selector in order and return the first match
     const rq = (el, chain) => { for (const s of chain) { const r = el.querySelector(s); if (r) return r; } return null; };
     const rqa = (el, chain) => { for (const s of chain) { const r = el.querySelectorAll(s); if (r.length) return [...r]; } return []; };
 
-    // Track sections that need detail page enrichment (have "Show all" <a> links)
+    // Track sections with detail pages to visit for more data
     const _sectionsNeedingDetailPage = new Set();
     const _modalSkillCandidates = [];
 
@@ -730,12 +711,10 @@ async function inlineScrapeFunction() {
       const maxH = () => document.body.scrollHeight;
       const sectionKeywords = /experience|expérience|experiencia|erfahrung|esperienza|experiência|خبرة|education|formation|educación|ausbildung|istruzione|educação|formação|تعليم|skills|compétences|habilidades|kenntnisse|competenze|competências|مهارات|certif|licen|volunteer|bénévolat|voluntariado|ehrenamt|volontariato|voluntariado|تطوع|project|projet|proyecto|projekt|progetto|projeto|مشاريع|language|langue|idioma|sprach|lingua|لغات|honor|award|publication|recommendation|organisation|course|curso|kurs|corso/i;
 
-      // Detect SDUI layout (2025+ LinkedIn) — componentkey attributes present in DOM
+      // Check if this is the newer SDUI layout
       const isSDUI = document.querySelectorAll('div[componentkey]').length > 5;
 
-      // ── SCROLL PASS 1: Progressive scroll until page height stabilizes ──
-      // LinkedIn lazy-loads sections as they enter viewport via IntersectionObserver
-      // SDUI: server-rendered, content mostly in DOM — limit iterations heavily
+      // Scroll down to trigger lazy loading (fewer passes needed in SDUI)
       let prevH = 0, stableCount = 0, scrollIter = 0;
       const maxScrollIter = isSDUI ? 5 : 14;
       while (stableCount < 2 && scrollIter < maxScrollIter) {
@@ -750,9 +729,7 @@ async function inlineScrapeFunction() {
         scrollIter++;
       }
 
-      // ── SCROLL PASS 2: Section-targeted scroll ──
-      // Scroll each section to center viewport — triggers section-level lazy loading
-      // SDUI: skip — content is already server-rendered, no IntersectionObserver lazy loading
+      // Scroll to each section to trigger loading (skipped in SDUI)
       if (!isSDUI) {
         for (const sec of document.querySelectorAll('section')) {
           const h = sec.querySelector('h2, h3');
@@ -764,9 +741,7 @@ async function inlineScrapeFunction() {
         }
       }
 
-      // ── Click all inline "See more" / "Voir plus" buttons to expand collapsed text ──
-      // SDUI: skip — descriptions are read directly from span[data-testid="expandable-text-box"]
-      //       without needing button clicks (we clone + strip the button node in the parsers)
+      // Click "See more" buttons to expand text (not needed in SDUI)
       const seeMoreRe = /\bsee more\b|\bvoir plus\b|\bvoir la totalit[eé]\b|\blire la suite\b|\bplus d['']infos?\b|\bmehr anzeigen\b|\bver más\b|\bvedi altro\b|\bver mais\b|\bمزيد\b|\bعرض المزيد\b|\bmostrar mais\b/i;
       const showAllRe = /show all|see all|voir (toutes?|tous)|alle anzeigen|ver todo|mostra tutti|ver tudo|mostrar todo|عرض الكل/i;
       if (!isSDUI) {
@@ -786,10 +761,7 @@ async function inlineScrapeFunction() {
         }
       }
 
-      // ── Click "Show all X ..." elements — BOTH <button> AND <a> ──
-      // For <a> links pointing to /details/ pages: DON'T click (would navigate away)
-      // but mark the section for later detail-page enrichment.
-      // SDUI: only collect /details/ links for enrichment; skip button expansion (SDUI inline content is complete)
+      // Click "Show all" buttons or collect /details/ links for enrichment
       let expandedSections = false;
       if (isSDUI) {
         // SDUI fast path: collect /details/ links — filter to known enrichment sections only
@@ -830,8 +802,7 @@ async function inlineScrapeFunction() {
         }
       }
 
-      // ── Handle modal-based skill/section expansion ──
-      // SDUI: skills go to /details/skills/ (already captured above) — no modal used
+      // Open the skills modal if present (not used in SDUI)
       let skillsModalHandled = false;
       if (!isSDUI) for (const btn of document.querySelectorAll('button')) {
         const label = (btn.getAttribute('aria-label') || btn.textContent || '').toLowerCase();
@@ -873,8 +844,7 @@ async function inlineScrapeFunction() {
         }
       }
 
-      // ── Click pagination / "Show more results" / "Load more" buttons ──
-      // SDUI: skip — content is complete after initial render
+      // Click "Load more" buttons (skipped in SDUI)
       let paginationClicks = 0;
       if (!isSDUI) {
         for (const el of document.querySelectorAll('button, a')) {
@@ -891,7 +861,7 @@ async function inlineScrapeFunction() {
         }
       }
 
-      // ── SCROLL PASS 3: Post-expansion re-scroll (only if sections were expanded, non-SDUI only) ──
+      // Final re-scroll after expanding sections (non-SDUI only)
       if (!isSDUI && expandedSections) {
         for (let y = 0; y < maxH(); y += 1000) {
           window.scrollTo(0, y);
@@ -908,12 +878,10 @@ async function inlineScrapeFunction() {
     const normalize = (s) => (s || '').trim().replace(/\s+/g, ' ');
     const parseCount = (raw) => {
       if (!raw) return null;
-      // Normalize: strip all whitespace (including non-breaking spaces \u00A0, \u202F)
-      // and handle European-style separators (1.234 or 1,234 or 4 000)
+      // Normalize whitespace and number separators
       let t = raw.toString().trim().toLowerCase().replace(/[\s\u00A0\u202F]+/g, '');
       const hasSuffix = /[km]/.test(t);
-      // If there's a single dot or comma with exactly 3 digits after it and no suffix, it's a thousands sep
-      // e.g., "1.234" → "1234", "1,234" → "1234", but "1.2k" stays as-is
+      // Treat dot/comma followed by 3 digits as a thousands separator
       if (!hasSuffix) {
         t = t.replace(/[.,](\d{3})(?!\d)/g, '$1');
       }
@@ -924,9 +892,9 @@ async function inlineScrapeFunction() {
       if (t.includes('m')) return Math.round(n * 1000000);
       return Math.round(n);
     };
-    // LinkedIn empty-profile placeholder texts and CTA strings that must never be saved as real data
+    // LinkedIn placeholder texts that should not be saved as real profile data
     const _LINKEDIN_PLACEHOLDERS = [
-      // About / headline placeholders
+      // Placeholder text for empty about and headline sections
       /showcase your accomplishments/i,
       /showcase your services/i,
       /get up to 2x as many/i,
@@ -942,22 +910,22 @@ async function inlineScrapeFunction() {
       /write a summary to highlight/i,
       /highlight your personality or work experience/i,
       /highlight your personality/i,
-      // About section — volunteer/non-profit CTA placeholders
+      // Volunteer and non-profit CTA text that appears in empty profiles
       /tell non-?profits you are interested/i,
       /getting involved with your time and skills/i,
-      // Experience / job title placeholders
+      // Placeholder text for empty experience sections
       /^job title$/i,
       /^company name$/i,
       /^position title$/i,
       /^your job title$/i,
       /^organization$/i,
-      // Skills placeholders
+      // Placeholder text for empty skills section
       /^soft skills$/i,
       /^technical skills$/i,
       /^add skills?$/i,
       /^add a skill$/i,
       /^industry knowledge$/i,
-      // Generic LinkedIn CTA / empty state
+      // Generic LinkedIn CTAs and empty-state strings
       /^add (your|a|an) /i,
       /^share (your|a|an) /i,
       /^start (a|your) /i,
@@ -966,15 +934,15 @@ async function inlineScrapeFunction() {
       /open to (work|opportunities)/i,
       /providing services/i,
       /hiring on linkedin/i,
-      // Hiring / recruiter mode placeholders
+      // Text shown in recruiter or hiring mode that is not profile data
       /share that you.re hiring/i,
       /attract qualified candidates/i,
       /share.*hiring.*attract/i,
-      // Open-to-work / service banners that bleed into about
+      // Open-to-work banners that can appear in the about section
       /providing services/i,
       /open to work/i,
       /open for business/i,
-      // Generic "no about yet" CTA variants
+      // CTA text shown when the about section is empty
       /get discovered by/i,
       /let recruiters know/i,
       /show up in recruiter searches/i,
@@ -985,31 +953,39 @@ async function inlineScrapeFunction() {
     const isUiNoise = (raw) => {
       const t = normalize(raw).toLowerCase();
       if (!t) return true;
-      // LinkedIn empty-profile placeholder / CTA texts
+      // Generic empty profile CTAs
       if (isPlaceholder(raw)) return true;
-      // Core LinkedIn section headers and UI labels
+      // LinkedIn section headers that are not profile data
       if (/^(experience|expérience|experiencia|erfahrung|esperienza|experiência|خبرة|education|formation|educación|ausbildung|istruzione|educação|formação|تعليم|skills|compétences|habilidades|aptitudes|kenntnisse|competenze|competências|مهارات|about|à propos|acerca de|über|informazioni|sobre|نبذة|show all|see all|show more|see more|… more|more|view all|followers?|connections?|contact info|message|open to|add section|edit|modifier|activity|activité|actividad|aktivitäten|attività|atividade|نشاط|licenses?|certifications?|licences?|certificaciones?|zertifizierungen?|certificazioni?|languages?|langues?|idiomas?|sprachen?|lingue?|لغات|volunteer|bénévolat|volontariat|voluntariado|ehrenamt|volontariato|تطوع|projects?|projets?|proyectos?|projekte?|progetti?|projetos?|مشاريع|publications?|publicaciones?|publikationen?|pubblicazioni?|publicações?|منشورات|honors?|awards?|distinctions?|premios?|auszeichnungen?|premi?|prêmios?|جوائز|organisations?|organizaciones?|organisationen?|organizzazioni?|organizações?|منظمات|courses?|cours|cursos?|kurse?|corsi|دورات|recommendations?|recommandations?|recomendaciones?|empfehlungen?|raccomandazioni?|recomendações?|توصيات|causes you care about|supported)$/.test(t)) return true;
-      // Follower/connection counts like "500 connections" (multilingual)
+      // Connection and follower count strings
       if (/^\d[\d,.\s+]*\s*(followers?|connections?|abonnés?|contacts?|seguidores?|conexiones?|kontakte?|follower|collegamenti|seguidor(es)?|متابع|اتصال)$/i.test(t)) return true;
-      // LinkedIn top navigation items (appear in aria-hidden spans on every page)
+      // Navigation labels that appear in profile page DOM but are not profile data
       if (/^(home|my network|jobs|messaging|notifications?|me|work|gaming|news|people|groups|events|learning|services|products|careers|premium|try premium)$/.test(t)) return true;
-      // LinkedIn skill/cert category labels (not actual data)
+      // Skill and certification category labels
       if (/^(industry knowledge|tools & technologies|interpersonal skills|other skills|other|see credential|show credential|view credential|issued|expires?|credential id|no expiration)$/.test(t)) return true;
-      // Pure short numbers (notification counts "24", pagination "1", etc.)
+      // Short numbers that are UI noise, not profile data
       if (/^\d{1,3}$/.test(t)) return true;
-      // Single character noise
+      // Single characters that should be ignored
       if (/^\w$/.test(t)) return true;
-      // Activity feed metadata — post comment/like counts, live stream tags, connection-degree separators
+      // Activity feed metadata like like counts and connection degree labels
       if (/^live$/i.test(t)) return true;
       if (/^\d+\s*(comments?|likes?|reactions?|shares?|reposts?|views?)/i.test(t)) return true;
-      // LinkedIn name•degree separator pattern: "Jihed Ayari • You", "Name • 1st", "Name • 2nd"
+      // Engagement count strings like "and 47 others reacted"
+      if (/and \d+ others? (reacted|liked|commented|reposted)/i.test(t)) return true;
+      // Translation prompt text from feed posts
+      if (/^show translation$/i.test(t)) return true;
+      // Repost count labels
+      if (/^\d+ repost(s)?$/i.test(t)) return true;
+      // Job placement badge text
+      if (/linkedin helped me get this job/i.test(t)) return true;
+      // "Show all N" link text that can leak into entries
+      if (/^show all \d+/i.test(t)) return true;
+      // Name and connection degree separator patterns
       if (/ • (you|1st|2nd|3rd|\d+(st|nd|rd|th)?)$/i.test(t)) return true;
       return false;
     };
 
-    // Helper: collect aria-hidden spans scoped strictly to `item` (excludes nested sub-items & buttons)
-    // Helper: collect aria-hidden spans scoped to `item` (excludes nested sub-items & buttons)
-    // Prefers leaf spans (no children) to avoid duplicate text, but falls back to parent spans
+    // Collect aria-hidden spans from an item, preferring leaf nodes to avoid duplicates
     const getScopedSpans = (item) => {
       const allSpans = Array.from(item.querySelectorAll('span[aria-hidden="true"]')).filter(s => {
         if (s.closest('button')) return false;
@@ -1021,19 +997,18 @@ async function inlineScrapeFunction() {
         }
         return true;
       });
-      // Prefer leaf spans (no child elements) to avoid text duplication
+      // Use leaf spans when possible to avoid duplicated text
       const leafSpans = allSpans.filter(s => s.children.length === 0);
       return leafSpans.length > 0 ? leafSpans : allSpans;
     };
 
-    // ── NAME ─────────────────────────────────────────────────
-    // Seed from JSON-LD first — it's guaranteed accurate and stable.
+    // Extract name - use JSON-LD first as it is more reliable
     let name = (_jsonLd && _jsonLd.name) ? String(_jsonLd.name).trim() : '';
-    // Skip these h2 patterns that are NOT the profile name
+    // Ignore h2 elements that are section headers, not the name
     const skipH = /^\d+\s*notification|profile\s+language|public\s+profile|ad\s+option|people\s+you\s+may|you\s+might\s+like|sign\s+in/i;
     let nameEl = null;
 
-    // DOM extraction (fills nameEl reference for photo/headline strategies below)
+    // Fall back to DOM extraction if JSON-LD did not have the name
     outer:
     for (const tag of ['h1', 'h2']) {
       for (const el of document.querySelectorAll(tag)) {
@@ -1052,7 +1027,7 @@ async function inlineScrapeFunction() {
       if (titleMatch) name = titleMatch[1].trim();
     }
 
-    // ── PROFILE PHOTO ──────────────────────────────────────────
+    // Extract profile photo
     // Priority order: JSON-LD (guaranteed accurate) → top-card DOM selectors
     // (scoped to top-card section to avoid matching company/school logos in experience)
     // → whole-page scan restricted to profile-displayphoto URLs only.
@@ -1134,7 +1109,7 @@ async function inlineScrapeFunction() {
       }
     } catch { /* noop */ }
 
-    // ── HEADLINE ─────────────────────────────────────────────
+    // Extract headline
     // Seed from JSON-LD (jobTitle or description field).
     let headline = '';
     if (_jsonLd) {
@@ -1142,7 +1117,7 @@ async function inlineScrapeFunction() {
       else if (_jsonLd.description && _jsonLd.description.length < 300) headline = String(_jsonLd.description).trim();
     }
 
-    // Shared helper: detect location/geo strings (used by both Strategy 1 and 2)
+    // Helper to check if a string looks like a location
     const _isLikelyLocation = s => (s.includes(',') && s.length < 90) ||
       /\b(area|region|metro|greater|metropolitan|governorate|gouvernorat|wilaya|province|prefecture|district|county|city|ville|capitale|région)\b/i.test(s);
 
@@ -1159,35 +1134,43 @@ async function inlineScrapeFunction() {
       return s.length < 90 && left.trim().length >= 20 && right.trim().length >= 20;
     };
 
-    // Strategy 1: TreeWalker from name element (partner's approach - most robust)
+    // Try TreeWalker from the name element first
     if (nameEl) {
+      const tryWalk = (container) => {
+        const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+        let passedName = false;
+        while (walker.nextNode()) {
+          const node = walker.currentNode;
+          if (nameEl.contains(node)) { passedName = true; continue; }
+          if (!passedName) continue;
+          const t = node.textContent.trim();
+          if (!t || t.length < 3) continue;
+          if (t === name) continue;
+          // Skip nav/button text, but allow anchor-wrapped text (SDUI often wraps
+          // headline/info text in clickable <a> cards).
+          if (node.parentElement?.closest('button, nav')) continue;
+          // Skip degree badges ("· 2nd"), UI actions, and noise
+          if (_isDegreeBadge(t)) continue;
+          if (/^(\d+|connection|follow|contact|open to|add section|message|enhance|modifier|pending|more|show|see all|click|pronoun|she\/|he\/|they\/|try\s|verify\s|premium|MAD)/i.test(t)) continue;
+          // Skip employer/school combos ("BDS BATIMENT · Université Paris Dauphine") - not the headline
+          if (_isEmployerSchoolLine(t)) continue;
+          if (t.length <= 250 && !_isLikelyLocation(t)) {
+            return t;
+          }
+        }
+        return '';
+      };
+
+      // Try progressively wider containers until a headline-like text is found.
       let container = nameEl;
       for (let i = 0; i < 8 && container.parentElement; i++) {
         container = container.parentElement;
-        if (container.children.length >= 3) break;
-      }
-      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
-      let passedName = false;
-      while (walker.nextNode()) {
-        const node = walker.currentNode;
-        if (nameEl.contains(node)) { passedName = true; continue; }
-        if (!passedName) continue;
-        const t = node.textContent.trim();
-        if (!t || t.length < 3) continue;
-        if (t === name) continue;
-        if (node.parentElement?.closest('button, nav, a[href]')) continue;
-        // Skip degree badges ("· 2nd"), UI actions, and noise
-        if (_isDegreeBadge(t)) continue;
-        if (/^(\d+|connection|follow|contact|open to|add section|message|enhance|modifier|pending|more|show|see all|click|pronoun|she\/|he\/|they\/|try\s|premium|MAD)/i.test(t)) continue;
-        // Skip employer/school combos ("BDS BATIMENT · Université Paris Dauphine") - not the headline
-        if (_isEmployerSchoolLine(t)) continue;
-        if (t.length <= 250 && !_isLikelyLocation(t)) {
-          headline = t; break;
-        }
+        const found = tryWalk(container);
+        if (found) { headline = found; break; }
       }
     }
 
-    // Strategy 2: text-body-medium class (stable) before hashed classes (may change)
+    // Fall back to class-based selectors
     if (!headline) {
       const allP = rqa(document, ['.text-body-medium.break-words', '[class*="text-body-medium"]', 'p.f6996daa', 'p[class*="artdeco-entity"]']);
       for (const p of allP) {
@@ -1198,6 +1181,7 @@ async function inlineScrapeFunction() {
             !text.includes('Premium') && !text.includes('MAD') &&
             !text.includes('followers') && !text.includes('connections') &&
             !text.toLowerCase().startsWith('try ') &&
+            !text.toLowerCase().startsWith('verify ') &&
             !_isLikelyLocation(text) &&
             text !== name) {
           headline = text; break;
@@ -1205,7 +1189,7 @@ async function inlineScrapeFunction() {
       }
     }
 
-    // Strategy 3: classic selectors fallback
+    // Last resort: try classic selectors
     if (!headline) {
       for (const sel of ['.text-body-medium.break-words', '[class*="text-body-medium"]']) {
         const el = document.querySelector(sel);
@@ -1218,10 +1202,10 @@ async function inlineScrapeFunction() {
       }
     }
 
-    // ── LOCATION ─────────────────────────────────────────────
+    // Extract location
     let location_ = '';
 
-    // Strategy 1: direct LinkedIn location element selectors (profile header area)
+    // Try known location selectors in the profile header
     for (const sel of [
       '.text-body-small.inline.t-black--light.break-words',
       'span[class*="text-body-small"][class*="t-black--light"]',
@@ -1237,7 +1221,7 @@ async function inlineScrapeFunction() {
       break;
     }
 
-    // Strategy 2: hashed class p tags with location keywords
+    // Look for paragraphs with location-like text
     if (!location_) {
       const allP = rqa(document, ['p.f6996daa', '.text-body-medium.break-words', '[class*="text-body-medium"]', 'p[class*="artdeco-entity"]']);
       for (const p of allP) {
@@ -1258,7 +1242,7 @@ async function inlineScrapeFunction() {
       }
     }
 
-    // Strategy 3: TreeWalker near the name element — catches hashed-class locations
+    // Walk the DOM near the name to find location text
     if (!location_ && nameEl) {
       let headerEl = nameEl;
       for (let i = 0; i < 8 && headerEl.parentElement; i++) headerEl = headerEl.parentElement;
@@ -1281,54 +1265,143 @@ async function inlineScrapeFunction() {
       }
     }
 
-    // ── SECTION FINDER ───────────────────────────────────────
-    function findSection(keywords) {
-      const kwLow = keywords.map(k => k.toLowerCase().trim());
+    // Find a section by name (e.g. Experience, Skills, Education)
+    // Guard: returns true when `el` is the Activity / Posts feed section.
+    const isActivityFeedSection = (el) => {
+      if (!el) return false;
+      // 1. data-view-name / aria-label attributes
+      const dvn = (el.getAttribute('data-view-name') || '').toLowerCase();
+      if (/feed|activity|posts/.test(dvn)) return true;
+      const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+      if (/activity|posts/.test(ariaLabel)) return true;
+      // 2. Any /details/ link? Then it's a real profile section, not feed
+      if (el.querySelector('a[href*="/details/"]')) return false;
+      // 3. Does it contain pvs-entity items? Real profile section, not feed
+      if (el.querySelector('[class*="pvs-entity"], li[class*="artdeco"], li[data-view-name]')) return false;
+      // 4. Engagement noise density — even 1 hit in a section that has no profile items
+      const sample = el.textContent.substring(0, 3000);
+      const noiseHits = (sample.match(/\b(reacted|repost(ed|s)?|commented|liked|comment(s)?|reaction(s)?|and \d+ others?)\b/gi) || []).length;
+      if (noiseHits >= 1) return true;
+      // 5. Feed post fingerprints: carousel position, reaction counts
+      if (/\b\d+\/\d+\b/.test(sample)) return true;
+      return false;
+    };
 
-      // Strategy 1: heading text match — check h2/h3 INSIDE each <section>
-      // This is the most reliable: LinkedIn wraps each profile section in a <section> tag
-      // with an h2 heading. We check the heading text (not the full section textContent,
-      // which could match noise like post text containing "experience").
+    // Guard: returns true when `el` is a sidebar/recommendation module
+    // ("People also viewed", "Pages for you", "You might like", ads, etc.)
+    // These often contain headings like "Higher Education" or "Skills" that
+    // would otherwise false-match the profile's real Education/Skills sections.
+    const isSidebarRecommendationSection = (el) => {
+      if (!el) return false;
+      const dvn = (el.getAttribute('data-view-name') || '').toLowerCase();
+      if (/insight|recommend|browse-map|people-also-viewed|ads?|cross-sell|suggested/.test(dvn)) return true;
+      const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+      if (/people also viewed|people you may know|pages for you|you might like|ads?\b|promoted|browse|similar/.test(ariaLabel)) return true;
+      // Heading-text based detection
+      const heading = el.querySelector(':scope > div h2, :scope > div h3, :scope > header h2, h2, h3');
+      if (heading) {
+        const ht = heading.textContent.trim().toLowerCase().replace(/\s+/g, ' ');
+        if (/people also viewed|people you may know|pages for you|you might like|similar pages|more profiles for you|explore premium|browse|ads you may be interested in/.test(ht)) return true;
+      }
+      // "Follow" buttons + "connections follow this page" pattern is unique to Pages-for-you widgets
+      if (/\bfollow\b.*\bthis page\b|other connections follow this page/i.test(el.textContent.substring(0, 500))) return true;
+      return false;
+    };
+
+    // Given a heading element, return the narrowest ancestor that plausibly
+    // wraps just THIS section's content (heading + its entries), not a larger
+    // container that also wraps sibling sections (Activity feed, Education, etc.).
+    // Walk up from the heading until we find an ancestor whose ONLY heading
+    // (h1-h4) is this one — i.e. it doesn't also contain other section headings.
+    const narrowToHeadingScope = (heading, fallbackSec) => {
+      let el = heading.parentElement;
+      let best = fallbackSec;
+      for (let depth = 0; depth < 6 && el && el !== document.body; depth++, el = el.parentElement) {
+        const headings = el.querySelectorAll('h1, h2, h3, h4');
+        if (headings.length === 1 && headings[0] === heading) {
+          best = el; // keep widening while still single-heading
+        } else if (headings.length > 1) {
+          break; // this ancestor wraps multiple sections — stop, use last good `best`
+        }
+      }
+      // Sanity: if narrowing accidentally produced a node that itself looks
+      // like the activity feed or a sidebar module, fall back to the original section.
+      if (isActivityFeedSection(best) || isSidebarRecommendationSection(best)) return fallbackSec;
+      return best;
+    };
+
+    // Match by heading text inside each section
+    function findSection(keywords, excludeNodes = []) {
+      const kwLow = keywords.map(k => k.toLowerCase().trim());
+      const isExcluded = (node) => excludeNodes.some(ex => ex && (ex === node || ex.contains(node) || node.contains(ex)));
+
       for (const sec of document.querySelectorAll('section')) {
+        if (isActivityFeedSection(sec) || isSidebarRecommendationSection(sec) || isExcluded(sec)) continue;
         for (const heading of sec.querySelectorAll(':scope > div h2, :scope > div h3, :scope > header h2')) {
           const ht = heading.textContent.trim().toLowerCase().replace(/\s+/g, ' ');
-          if (kwLow.some(k => ht === k || ht.startsWith(k) || ht.includes(k))) return sec;
+          if (kwLow.some(k => ht === k || ht === k + 's')) return narrowToHeadingScope(heading, sec);
         }
       }
 
-      // Strategy 2: aria-label / data-view-name / id attributes
+      // Looser heading match, still excluding sidebar elements
+      for (const sec of document.querySelectorAll('section')) {
+        if (isActivityFeedSection(sec) || isSidebarRecommendationSection(sec) || isExcluded(sec)) continue;
+        for (const heading of sec.querySelectorAll(':scope > div h2, :scope > div h3, :scope > header h2')) {
+          const ht = heading.textContent.trim().toLowerCase().replace(/\s+/g, ' ');
+          if (kwLow.some(k => ht.startsWith(k) || ht.includes(k))) return narrowToHeadingScope(heading, sec);
+        }
+      }
+
+      // Match by aria-label, data-view-name, or id attributes
       for (const kw of kwLow) {
         const safeKw = CSS.escape ? kw : kw.replace(/[^\w\s-]/g, '');
-        const hit = document.querySelector(`section[aria-label*="${safeKw}" i]`) ||
-                    document.querySelector(`section[id*="${safeKw}" i]`) ||
-                    document.querySelector(`[data-view-name*="${safeKw}" i]`) ||
-                    document.getElementById(safeKw);
-        if (hit) {
+        const hits = [
+          ...document.querySelectorAll(`section[aria-label*="${safeKw}" i]`),
+          ...document.querySelectorAll(`section[id*="${safeKw}" i]`),
+          ...document.querySelectorAll(`[data-view-name*="${safeKw}" i]`),
+        ];
+        const byId = document.getElementById(safeKw);
+        if (byId) hits.push(byId);
+        for (const hit of hits) {
+          if (isActivityFeedSection(hit) || isSidebarRecommendationSection(hit) || isExcluded(hit)) continue;
           const sec = hit.closest('section');
-          if (sec) return sec;
+          if (sec) {
+            if (isActivityFeedSection(sec) || isSidebarRecommendationSection(sec) || isExcluded(sec)) continue;
+            return sec;
+          }
           return hit;
         }
       }
 
-      // Strategy 3: first 120 chars of section textContent (catches hashed-class layouts
-      // where heading text is not in h2/h3 but is the first visible text in the section)
+      // Match by the first heading in the section
+      // (avoids matching unrelated sections whose body text happens to mention the keyword)
       for (const sec of document.querySelectorAll('section')) {
+        if (isActivityFeedSection(sec) || isSidebarRecommendationSection(sec) || isExcluded(sec)) continue;
+        const firstHeading = sec.querySelector('h1, h2, h3, h4');
+        if (!firstHeading) continue;
+        const ht = firstHeading.textContent.trim().toLowerCase().replace(/\s+/g, ' ');
+        if (kwLow.some(k => ht === k || ht.startsWith(k) || ht.includes(k))) return narrowToHeadingScope(firstHeading, sec);
+      }
+
+      // Match by section text content as a last resort
+      for (const sec of document.querySelectorAll('section')) {
+        if (isActivityFeedSection(sec) || isSidebarRecommendationSection(sec) || isExcluded(sec)) continue;
         const first120 = sec.textContent.trim().substring(0, 120).toLowerCase();
         if (kwLow.some(k => first120.includes(k))) return sec;
       }
 
-      // Strategy 4: any heading or aria-hidden span inside artdeco-card containers
+      // Look inside artdeco card containers
       const containers = [...document.querySelectorAll('section'), ...document.querySelectorAll('[class*="artdeco-card"]')];
       for (const container of containers) {
+        if (isActivityFeedSection(container) || isSidebarRecommendationSection(container) || isExcluded(container)) continue;
         for (const el of container.querySelectorAll('h2, h3, span[aria-hidden="true"]')) {
           if (el.closest('li')) continue;
           const et = el.textContent.trim().toLowerCase().replace(/\s+/g, ' ');
-          // Partial match: keyword appears anywhere in the heading text
           if (kwLow.some(k => et === k || et.includes(k))) return container;
         }
       }
 
-      // Strategy 5: TreeWalker fallback (hashed layout where nothing else works)
+      // Walk the DOM tree as a final fallback
       const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
       while (tw.nextNode()) {
         const node = tw.currentNode;
@@ -1339,13 +1412,17 @@ async function inlineScrapeFunction() {
         let el = par.parentElement;
         for (let depth = 0; depth < 12 && el && el !== document.body; depth++, el = el.parentElement) {
           if (depth < 1) continue;
-          if (el.querySelector('li') || el.querySelector('[class*="pvs-entity"]')) return el;
+          const hasPvsEntity = el.querySelector('[class*="pvs-entity"]');
+          const hasProfileLi = el.querySelector('li[class*="artdeco"], li[class*="pvs"], li[data-view-name]');
+          if (!hasPvsEntity && !hasProfileLi) continue;
+          if (isActivityFeedSection(el) || isSidebarRecommendationSection(el) || isExcluded(el)) continue;
+          return el;
         }
       }
       return null;
     }
 
-    // ── ABOUT ────────────────────────────────────────────────
+    // Extract about section
     let about = '';
     let aboutSec = null;
     try {
@@ -1437,7 +1514,7 @@ async function inlineScrapeFunction() {
     }
     } catch (e) { console.warn('[LinkedIn AI] About section error:', e); }
 
-    // ── ABOUT SANITY CHECK: discard noise that leaked into the about field ──
+    // Remove noise that leaked into the about field
     if (about) {
       const _aboutIsNoise = (s) => {
         // Too short to be a real about section
@@ -1462,7 +1539,7 @@ async function inlineScrapeFunction() {
       }
     }
 
-    // ── EXPERIENCE ───────────────────────────────────────────
+    // Extract experience entries
     const experience = [];
     let expSec = null;
     try {
@@ -1489,8 +1566,7 @@ async function inlineScrapeFunction() {
       };
 
       // Helper: parse experience entry — content-based classification only (no hashed CSS classes).
-      // Strategy 1: data-field attributes (stable, LinkedIn uses these for semantic markup).
-      // Strategy 2: date-regex classification for each span text (robust across deploys).
+      // Use data-field attributes first, fall back to date pattern matching
       const parseExpItemSemantic = (li, texts) => {
         const entry = { title: '', company: '', dates: '', duration: '', location: '', employmentType: '', description: '' };
 
@@ -1595,7 +1671,7 @@ async function inlineScrapeFunction() {
         return leafSpans.length > 0 ? leafSpans : allSpans;
       };
 
-      // ── Strategy 0: SDUI-specific parser (2025+ LinkedIn layout) ─────────────
+      // SDUI-specific experience parser (2025+ LinkedIn layout)
       // Uses stable div[componentkey^="entity-collection-item"] entries + edit form links.
       // Grouped detection: entry has a <ul> child → multiple roles at same company.
       // Single detection: entry has direct a[href*="/edit/forms/position/"] → one role.
@@ -1616,31 +1692,45 @@ async function inlineScrapeFunction() {
 
               for (const li of roleList.querySelectorAll('li')) {
                 const editLink = li.querySelector('a[href*="/edit/forms/position/"]');
-                if (!editLink) continue;
                 // Grouped role edit-link p[] order:
                 //   p[0] = role title
                 //   p[1] = "Aug 2025 - Oct 2025 · 3 mos"
                 //   p[2] = "City, Region · On-site"  (optional)
-                const ps = [...editLink.querySelectorAll('p')]
+                // On 3rd-party profiles there are no edit links — fall back to p[] inside the li
+                const psSource = editLink || li;
+                const ps = [...psSource.querySelectorAll('p')]
                   .map(p => (p.textContent || '').trim())
-                  .filter(t => t.length > 0);
+                  .filter(t => t.length > 0 && !isUiNoise(t));
+                if (ps.length === 0) continue;
 
-                const title    = ps[0] || '';
-                const datesRaw = ps[1] || '';
-                const dp       = datesRaw.split('·');
-                const dates    = dp[0]?.trim() || '';
-                const duration = dp[1]?.trim() || '';
+                // Classify each p[] by content to handle both own-profile (edit links)
+                // and 3rd-party profiles (no edit links, more p[] present).
+                const _isRoleDateStr  = t => /\b(20\d\d|19\d\d|Present|présent|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i.test(t) && t.length < 80;
+                const _isRoleDuration = t => /^\d+\s*(yr|mo|an|mois|año|mes|Jahr|Monat)/i.test(t);
+                const _isRoleEmpType  = t => /^(Internship|Full-time|Part-time|Contract|Freelance|Self-employed|Apprenticeship|Seasonal|Temporary|Volunteering|CDD|CDI|Stage|Alternance|Remote|On-site|Hybrid)$/i.test(t);
+                const _isRoleLocation = t => (t.includes(',') && t.length < 100) || (t.includes('·') && /\b(remote|on-site|hybrid)\b/i.test(t));
 
-                // p[2] may be location or standalone work-mode
-                let location = '', roleEmpType = companyEmpType;
-                if (ps[2]) {
-                  const locParts = ps[2].split('·').map(s => s.trim());
-                  location = locParts[0];
-                  if (locParts[1] && /^(Remote|On-site|Hybrid|Internship|Full-time|Part-time|Contract|Freelance)$/i.test(locParts[1])) {
-                    roleEmpType = locParts[1];
-                  } else if (/^(Remote|On-site|Hybrid)$/i.test(locParts[0])) {
-                    location = '';
-                    roleEmpType = locParts[0];
+                let title = '', dates = '', duration = '', location = '', roleEmpType = companyEmpType;
+                for (const t of ps) {
+                  if (_isRoleDateStr(t) && !dates) {
+                    const dp = t.split('·');
+                    dates    = dp[0].trim();
+                    duration = dp[1]?.trim() || '';
+                    continue;
+                  }
+                  if (_isRoleDuration(t) && !duration) { duration = t; continue; }
+                  if (_isRoleEmpType(t) && !roleEmpType) { roleEmpType = t; continue; }
+                  if (_isRoleLocation(t) && !location) {
+                    const locParts = t.split('·').map(s => s.trim());
+                    location = locParts[0];
+                    if (locParts[1] && _isRoleEmpType(locParts[1]) && !roleEmpType) roleEmpType = locParts[1];
+                    if (/^(Remote|On-site|Hybrid)$/i.test(locParts[0])) { location = ''; roleEmpType = roleEmpType || locParts[0]; }
+                    continue;
+                  }
+                  // First unclassified short string = title (skip if it duplicates the company name)
+                  if (!title && t.length < 120 && t.toLowerCase() !== company.toLowerCase()) {
+                    title = t;
+                    continue;
                   }
                 }
 
@@ -1676,10 +1766,11 @@ async function inlineScrapeFunction() {
               // 4. Date pattern → dates/duration. Location pattern → location/workType.
               // 5. Description comes from data-testid span (outside edit link).
               const editLink = entry.querySelector('a[href*="/edit/forms/position/"]');
-              if (!editLink) continue;
-              const ps = [...editLink.querySelectorAll('p')]
+              // On 3rd-party profiles, no edit link exists — fall back to p[] inside the entry
+              const psSource = editLink || entry;
+              const ps = [...psSource.querySelectorAll('p')]
                 .map(p => (p.textContent || '').trim())
-                .filter(t => t.length > 0);
+                .filter(t => t.length > 0 && !isUiNoise(t));
 
               let title = '', company = '', empType = '', dates = '', duration = '', workType = '';
 
@@ -1766,10 +1857,10 @@ async function inlineScrapeFunction() {
         console.log(`[ProfileScrape SDUI] experience: ${experience.length} entries`, experience.map(e => `${e.title} @ ${e.company}`));
       }
 
-      // Strategy 1: Find ALL list items (fallback for older LinkedIn layouts)
+      // Fall back to list items for older LinkedIn layouts
       // LinkedIn structure: section > ul > li.group (company) > div > ul > li.leaf (role 1, role 2)
       // Single-role companies: section > ul > li.leaf (role with company inline)
-      // Skip if SDUI strategy already found entries
+      // Skip if SDUI already found entries
       const allExpItems = experience.length > 0 ? [] : [...expSec.querySelectorAll('li, .pvs-entity, [data-view-name*="profile-component-entity"], .artdeco-list__item')];
       const leafItems = [];
       const groupItems = [];
@@ -1839,7 +1930,13 @@ async function inlineScrapeFunction() {
             }
           }
 
-          if ((entry.title || entry.company) && !isUiNoise(entry.title) && !isUiNoise(entry.company)) {
+          const looksLikeFeedPost = (
+            !entry.title && !entry.company
+          ) || (
+            entry.description && entry.description.length > 120 &&
+            /\b(reacted|reposted|commented|followers?|connections?|hashtag|#\w+)\b/i.test(entry.description)
+          );
+          if ((entry.title || entry.company) && !isUiNoise(entry.title) && !isUiNoise(entry.company) && !looksLikeFeedPost) {
             const key = (entry.title + entry.company).toLowerCase();
             if (!experience.some(r => (r.title + r.company).toLowerCase() === key)) {
               experience.push(entry);
@@ -1849,8 +1946,11 @@ async function inlineScrapeFunction() {
         }
       }
 
-      // Strategy 2: hashed class / section text fallback
+      // Fall back to hashed class matching
       if (experience.length === 0) {
+        if (expSec && isActivityFeedSection(expSec)) {
+          console.warn('[ProfileScrape] expSec looks like Activity feed — skipping Strategy 2 fallback');
+        } else {
         let texts = rqa(expSec, ['p.f6996daa', '.text-body-medium', '[class*="text-body-medium"]']).map(p => p.textContent.trim()).filter(t => t.length > 1);
         if (texts.length === 0) {
           texts = (expSec.innerText || '').split('\n').map(t => t.trim()).filter(Boolean);
@@ -1901,7 +2001,9 @@ async function inlineScrapeFunction() {
 
           } else if (text.length > 60 && current.title && current.company) {
             // Long text after title+company → description
-            current.description = current.description
+            // Skip if it looks like an Activity feed post narrative
+            if (/\b(reacted|reposted|#\w{3,}|followers?|connections?)/i.test(text)) { /* skip feed text */ }
+            else current.description = current.description
               ? current.description + ' ' + text
               : text;
 
@@ -1935,19 +2037,32 @@ async function inlineScrapeFunction() {
             description: current.description || '',
           });
         }
+        } // end else (not activity feed)
       }
     }
     } catch (e) { console.warn('[LinkedIn AI] Experience section error:', e); }
 
-    // ── EDUCATION ────────────────────────────────────────────
+    // Extract education entries
     const education = [];
     let eduSec = null;
     try {
-    eduSec = findSection(['Education', 'Formation', 'education', 'formation', 'Educación', 'Ausbildung', 'Istruzione', 'Educação', 'Formação', 'تعليم']);
+    eduSec = findSection(['Education', 'Formation', 'education', 'formation', 'Educación', 'Ausbildung', 'Istruzione', 'Educação', 'Formação', 'تعليم'], [expSec, aboutSec]);
+
+    // Sanity guard: if the matched "education" section actually looks like the
+    // experience listing (e.g. "X yrs Y mos" duration patterns dominate, with no
+    // degree/field-of-study vocabulary), discard it — likely a mis-match from a
+    // Fall back to body text matching like the experience parser
+    if (eduSec && eduSec === expSec) eduSec = null;
+    if (eduSec) {
+      const eduText = (eduSec.textContent || '').toLowerCase();
+      const looksLikeExperience = /\b\d+\s*(yrs?|years?)\s*\d*\s*(mos?|months?)?\b/.test(eduText)
+        && !/(bachelor|master|degree|diplôme|licence|university|université|college|école|institute|institut|m\.sc|b\.sc|phd|baccalauréat|formation)/i.test(eduText);
+      if (looksLikeExperience) eduSec = null;
+    }
 
     if (eduSec) {
-      // ── Strategy 0: SDUI-specific education parser (2025+ LinkedIn layout) ────
-      // Strategy 0a: Edit links — only present on own profile (most accurate)
+      // SDUI-specific education parser
+      // Use edit links when on own profile
       const sduiEduLinks = [...eduSec.querySelectorAll('a[href*="/details/education/edit/forms/"]')];
       for (const link of sduiEduLinks) {
         try {
@@ -1971,7 +2086,7 @@ async function inlineScrapeFunction() {
         if (education.length >= 8) break;
       }
 
-      // Strategy 0b: componentkey entries — works on other people's profiles (no edit links)
+      // Use componentkey entries when viewing someone else's profile
       if (education.length === 0) {
         const sduiEduEntries = [...eduSec.querySelectorAll('div[componentkey^="entity-collection-item"]')];
         for (const entry of sduiEduEntries) {
@@ -1989,6 +2104,30 @@ async function inlineScrapeFunction() {
           if (education.length >= 8) break;
         }
         if (sduiEduEntries.length > 0) console.log(`[ProfileScrape SDUI] education (0b): ${education.length} entries`);
+      }
+
+      // Scan p-tags in list items as a fallback for third-party profiles
+      // where componentkey selectors yield nothing but section exists)
+      if (education.length === 0) {
+        const eduItems = [...eduSec.querySelectorAll('li, [data-view-name*="profile-component-entity"], .pvs-entity')];
+        for (const item of eduItems) {
+          try {
+            const ps = [...item.querySelectorAll('p, span[aria-hidden="true"]')]
+              .filter(el => el.children.length === 0 && !el.closest('button'))
+              .map(el => (el.textContent || '').trim())
+              .filter((t, i, arr) => t.length > 1 && !isUiNoise(t) && arr.indexOf(t) === i);
+            const school = ps.find(t => !isUiNoise(t) && !/^\d{4}/.test(t) && t.length > 2);
+            if (!school) continue;
+            const datesStr = ps.find(t => /\d{4}/.test(t)) || '';
+            const degreeStr = ps.find(t => t !== school && t !== datesStr && !isUiNoise(t) && t.length > 2) || '';
+            const key = (school + datesStr).toLowerCase();
+            if (!education.some(e => (e.school + e.dates).toLowerCase() === key)) {
+              education.push({ school, degree: degreeStr, fieldOfStudy: '', dates: datesStr, description: '' });
+            }
+          } catch(e) { /* skip */ }
+          if (education.length >= 8) break;
+        }
+        if (eduItems.length > 0 && education.length > 0) console.log(`[ProfileScrape] education (0c): ${education.length} entries`);
       }
 
       if (sduiEduLinks.length > 0) console.log(`[ProfileScrape SDUI] education: ${education.length} entries`, education.map(e => `${e.school} (${e.dates})`));
@@ -2069,7 +2208,7 @@ async function inlineScrapeFunction() {
         }
       }
 
-      // Strategy 2: hashed class / section text fallback
+      // Fall back to hashed class matching
       if (education.length === 0) {
         let texts = rqa(eduSec, ['p.f6996daa', '.text-body-medium', '[class*="text-body-medium"]']).map(p => p.textContent.trim()).filter(t => t.length > 1);
         if (texts.length === 0) {
@@ -2096,11 +2235,33 @@ async function inlineScrapeFunction() {
     }
     } catch (e) { console.warn('[LinkedIn AI] Education section error:', e); }
 
-    // ── SKILLS ───────────────────────────────────────────────
+    // Clean up education entries where school field contains a course title instead
+    // (Udemy, Coursera etc. list course names as separate entries)
+    const _isCourseTitleNotSchool = (s) => {
+      if (!s) return false;
+      // Long strings are course titles, not school names
+      if (s.length > 60) return true;
+      // Contains colons, exclamation marks, or multiple commas — course title pattern
+      if (/[:!]/.test(s) || (s.match(/,/g) || []).length > 2) return true;
+      // Looks like a certificate name
+      if (/\b(complete|training|bootcamp|course|masterclass|certificate|certification)\b/i.test(s)) return true;
+      return false;
+    };
+    // Filter and deduplicate
+    const _eduSeen = new Set();
+    for (let i = education.length - 1; i >= 0; i--) {
+      const e = education[i];
+      if (_isCourseTitleNotSchool(e.school)) { education.splice(i, 1); continue; }
+      const key = (e.school || '').toLowerCase().slice(0, 40);
+      if (_eduSeen.has(key)) { education.splice(i, 1); continue; }
+      _eduSeen.add(key);
+      // Also clean degree if it's a course title (replace with empty)
+      if (_isCourseTitleNotSchool(e.degree)) e.degree = '';
+    }
     const skills = [];
     let skillsSec = null;
     try {
-    skillsSec = findSection(['Skills', 'Compétences', 'skills', 'compétences', 'مهارات', 'Habilidades', 'Aptitudes', 'Kenntnisse', 'Competenze', 'Competências']);
+    skillsSec = findSection(['Skills', 'Compétences', 'skills', 'compétences', 'مهارات', 'Habilidades', 'Aptitudes', 'Kenntnisse', 'Competenze', 'Competências'], [expSec, eduSec, aboutSec]);
     const _skillSeen = new Set();
 
     const _isSkillNoise = (t) => {
@@ -2108,6 +2269,12 @@ async function inlineScrapeFunction() {
       if (isUiNoise(t)) return true;
       if (/\d{4}|endors|recommand|see more|voir plus|show all|voir tout/i.test(t)) return true;
       if (/and \+\d+ skills?/i.test(t)) return true;
+      // Activity feed reaction strings: "HASSAN JAHA and 92 others reacted"
+      if (/\band \d+ others? (reacted|liked|commented|reposted)/i.test(t)) return true;
+      // Standalone engagement counts leaking from feed
+      if (/\b\d+\s*(reactions?|comments?|reposts?|likes?|shares?)\b/i.test(t)) return true;
+      // Carousel position indicators: "1/5", "1/12"
+      if (/^\d+\/\d+$/.test(t.trim())) return true;
       // Filter experience-like entries (e.g. "Engineer at Google") but NOT short skill names containing "at"
       if ((t.includes(' at ') || t.includes(' @ ')) && t.length > 30) return true;
       // School names, degrees
@@ -2136,7 +2303,7 @@ async function inlineScrapeFunction() {
         return (span.textContent || '').trim();
       };
 
-      // ── Strategy 0: SDUI-specific skills parser (2025+ LinkedIn layout) ────
+      // SDUI-specific skills parser
       const sduiSkillEntries = [...skillsSec.querySelectorAll('div[componentkey^="com.linkedin.sdui.profile.skill("]')];
       if (sduiSkillEntries.length > 0) {
         for (const entry of sduiSkillEntries) {
@@ -2152,7 +2319,7 @@ async function inlineScrapeFunction() {
         console.log(`[ProfileScrape SDUI] skills inline: ${skills.length}`, skills.slice(0, 10));
       }
 
-      // Strategy 1: Get the FIRST span[aria-hidden] in each li/entity — that's the skill name
+      // Get the first aria-hidden span in each list item - that is the skill name
       const skillItems = skills.length > 0 ? [] : skillsSec.querySelectorAll('li, .pvs-entity, [data-view-name*="profile-component-entity"], .artdeco-list__item');
       for (const item of skillItems) {
         if (item.closest('nav, header, footer, button')) continue;
@@ -2168,7 +2335,7 @@ async function inlineScrapeFunction() {
         if (skills.length >= 50) break;
       }
 
-      // Strategy 2: all aria-hidden leaf spans (catches skills in non-standard layouts)
+      // Fall back to all aria-hidden leaf spans
       if (skills.length < 3) {
         for (const s of skillsSec.querySelectorAll('span[aria-hidden="true"]')) {
           if (s.closest('nav, header, button')) continue;
@@ -2202,7 +2369,7 @@ async function inlineScrapeFunction() {
     const languages = [];
     let langSec = null;
     try {
-    langSec = findSection(['Languages', 'Langues', 'languages', 'langues', 'اللغات', 'Idiomas', 'Sprachen', 'Lingue', 'Idiomas']);
+    langSec = findSection(['Languages', 'Langues', 'languages', 'langues', 'اللغات', 'Idiomas', 'Sprachen', 'Lingue', 'Idiomas'], [expSec, eduSec, skillsSec, aboutSec]);
     if (langSec) {
       const allItems = Array.from(langSec.querySelectorAll('li, .pvs-entity, [data-view-name*="profile-component-entity"]'))
         .filter(item => !item.parentElement?.closest('li'));
@@ -2226,7 +2393,7 @@ async function inlineScrapeFunction() {
     const certifications = [];
     let certSec = null;
     try {
-    certSec = findSection(['Licenses', 'Certifications', 'Licences', 'certifications', 'licenses & certifications', 'licences et certifications', 'Licencias', 'Certificaciones', 'Zertifizierungen', 'Lizenzen', 'Certificazioni', 'Licenças', 'Certificações', 'التراخيص والشهادات']);
+    certSec = findSection(['Licenses', 'Certifications', 'Licences', 'certifications', 'licenses & certifications', 'licences et certifications', 'Licencias', 'Certificaciones', 'Zertifizierungen', 'Lizenzen', 'Certificazioni', 'Licenças', 'Certificações', 'التراخيص والشهادات'], [expSec, eduSec, skillsSec, langSec, aboutSec]);
     if (certSec) {
       const isCertNoise = (t) => {
         if (isUiNoise(t)) return true;
@@ -2839,11 +3006,18 @@ function scrapeDetailPageContent(SECTION) {
 
     if (SECTION === 'skills') {
       const seen = new Set();
+      const looksLikeOrgName = t => /\b(université|university|universidad|universität|università|universidade|school|école|institut|institute|college|académie|academy|faculté|faculty|polytechnique|polydisciplinaire)\b/i.test(t)
+        || /^\d+\s*(endorsement|recommandation)s?$/i.test(t);
       // SDUI: componentkey-based skill entries
       const sduiSkills = [...root.querySelectorAll('div[componentkey^="com.linkedin.sdui.profile.skill("]')];
       if (sduiSkills.length > 0) {
         for (const entry of sduiSkills) {
-          const t = normalize(entry.querySelector('p')?.textContent || '');
+          // Each skill entry div may contain multiple <p> tags: the skill name
+          // itself, plus the endorsement count or the school/company that
+          // associated the skill (e.g. "Université Ibn Zohr - Faculté ...").
+          // Pick the first <p> that doesn't look like an org name / endorsement count.
+          const ps = [...entry.querySelectorAll('p')].map(p => normalize(p.textContent)).filter(Boolean);
+          const t = ps.find(p => !looksLikeOrgName(p)) || '';
           if (!t || t.length < 2 || t.length > 80 || isUiNoise(t) || /\d{4}|endorsed|see more|show all/i.test(t)) continue;
           if (!seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); items.push(t); }
           if (items.length >= 50) break;
@@ -2863,22 +3037,57 @@ function scrapeDetailPageContent(SECTION) {
       }
       // Last resort: all visible spans
       if (items.length === 0) {
+        // On the /details/skills/ page, each skill is followed by either an
+        // endorsement count ("1 endorsement") or the school/company name that
+        // associated that skill (e.g. "Université Ibn Zohr - Faculté ..."). Only
+        // the skill name itself should be kept — filter out institution/company lines.
         for (const span of root.querySelectorAll('span[aria-hidden="true"]')) {
           if (span.closest('nav,header,footer,aside,button,[role="navigation"]')) continue;
           const t = getSpanText(span);
           if (!t || t.length < 2 || t.length > 60 || isUiNoise(t)) continue;
           if (/\d{4}|endorsed|see more|show all|no expiration|and \+\d+ skills?/i.test(t)) continue;
           if (/^\d+$/.test(t) || /^(industry knowledge|tools|interpersonal|other skills)/i.test(t)) continue;
+          if (looksLikeOrgName(t)) continue;
           if (!seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); items.push(t); }
           if (items.length >= 50) break;
         }
       }
     } else if (SECTION === 'experience') {
+      // ── Strategy 0: SDUI componentkey entries (2025+ LinkedIn, other people's profiles) ─
+      // On detail pages for other people, LinkedIn renders componentkey divs, not edit links.
+      const sduiExpEntries = [...root.querySelectorAll('div[componentkey*="experience"], div[componentkey*="Experience"]')];
+      if (sduiExpEntries.length > 0) {
+        console.log('[ExpDetail] SDUI componentkey entries:', sduiExpEntries.length);
+        for (const entry of sduiExpEntries) {
+          const ps = [...entry.querySelectorAll('p, span[aria-hidden="true"]')]
+            .map(el => normalize(el.textContent))
+            .filter(t => t.length > 1 && t.length < 300 && !isUiNoise(t));
+          if (ps.length === 0) continue;
+          const item = { title: '', company: '', dates: '', duration: '', location: '', employmentType: '', description: '' };
+          for (const t of ps) {
+            if (/^\d+\s*(yr|mo|an|mois)/i.test(t)) { item.duration = t; continue; }
+            if (/\d{4}\s*[-–—]/.test(t) || (/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|présent|present|actuel)\b/i.test(t) && t.length < 60)) { if (!item.dates) { item.dates = t; continue; } }
+            if (/^(Remote|On-site|Hybrid|Internship|Full-time|Part-time|Contract|Freelance|Self-employed|Apprenticeship|Seasonal|Temporary)$/i.test(t)) { item.employmentType = t; continue; }
+            if (!item.title) { item.title = t; continue; }
+            if (!item.company) { item.company = t.replace(/\s*·.*$/, '').trim(); continue; }
+            if (!item.location && t.length < 80 && (t.includes(',') || /\b(remote|on-site|hybrid|area|region|city)\b/i.test(t))) { item.location = t; continue; }
+            if (t.length > 60 && !item.description) { item.description = t; continue; }
+          }
+          if (item.title || item.company) {
+            const key = (item.title + item.company).toLowerCase();
+            if (!items.some(e => (e.title + e.company).toLowerCase() === key)) items.push(item);
+          }
+          if (items.length >= 15) break;
+        }
+        console.log('[ExpDetail] SDUI items found:', items.length);
+      }
+      // ── Strategy 1: Generic li/pvs-entity fallback ───────────────────────────
+      if (items.length === 0) {
       for (const item of getLeafItems(root, itemSelectors)) {
         const texts = getItemTexts(item, 1000);
         if (texts.length === 0) continue;
         const entry = { title: '', company: '', dates: '', duration: '', location: '', employmentType: '', description: '' };
-        const boldSpan = item.querySelector('.t-bold span[aria-hidden="true"],[class*="t-bold"] span[aria-hidden="true"]');
+        const boldSpan = item.querySelector('.t-bold span[aria-hidden="true"],[class*="t-bold"] span[aria-hidden="true"], span[aria-hidden="true"]');
         if (boldSpan) entry.title = normalize(boldSpan.textContent);
         for (const t of texts) {
           if (entry.title && t === entry.title) continue;
@@ -2904,6 +3113,7 @@ function scrapeDetailPageContent(SECTION) {
         }
         if (items.length >= 15) break;
       }
+      } // end strategy 1 fallback
     } else if (SECTION === 'education') {
       // ── Strategy 0: SDUI edit links (own profile, 2025+ layout) ─────────────
       const eduEditLinks = [...root.querySelectorAll('a[href*="/details/education/edit/forms/"]')];
@@ -2928,11 +3138,50 @@ function scrapeDetailPageContent(SECTION) {
         } catch(e) { /* skip */ }
         if (items.length >= 8) break;
       }
-      // ── Strategy 1: SDUI componentkey entries ────────────────────────────────
+      // ── Strategy 0b: if exactly one edit link was found but the education
+      // section visibly contains multiple school entries, try to also pick up
+      // the remaining entries via componentkey/li without discarding what we have.
+      if (items.length === 1 && eduEditLinks.length <= 1) {
+        const sectionLis = [...root.querySelectorAll('li[data-view-name*="education"], li[data-view-name*="profile-component-entity"]')];
+        if (sectionLis.length > 1) {
+          for (const li of sectionLis) {
+            const ps = [...li.querySelectorAll('p')]
+              .map(p => normalize(p.textContent))
+              .filter(t => t.length > 1 && !isUiNoise(t) && !/^skills?:/i.test(t));
+            const school = ps.find(t => !/\d{4}/.test(t)) || '';
+            if (!school || isUiNoise(school)) continue;
+            const datesRaw = ps.find(t => /\d{4}/.test(t)) || '';
+            const nonSchoolNonDate = ps.filter(t => t !== school && !/\d{4}/.test(t));
+            const degreeRaw = nonSchoolNonDate[0] || '';
+            const commaIdx = degreeRaw.indexOf(',');
+            const degree = commaIdx > 0 ? degreeRaw.slice(0, commaIdx).trim() : degreeRaw;
+            const fieldOfStudy = commaIdx > 0 ? degreeRaw.slice(commaIdx + 1).trim() : (nonSchoolNonDate[1] || '');
+            const key = (school + '|' + degree).toLowerCase();
+            if (!items.some(e => (e.school + '|' + e.degree).toLowerCase() === key)) {
+              items.push({ school, degree, fieldOfStudy, dates: datesRaw });
+            }
+            if (items.length >= 8) break;
+          }
+        }
+      }
+      // ── Strategy 1: SDUI componentkey entries (works for other people's profiles) ───
       if (items.length === 0) {
-        const sduiEdu = [...root.querySelectorAll('div[componentkey*="education"]')];
+        // Try broader selectors — LinkedIn uses both 'education' and 'Education' in componentkey.
+        // IMPORTANT: a componentkey div may be a CONTAINER wrapping multiple entry divs
+        // (e.g. the whole education list), which would merge all schools into one item.
+        // Prefer <li> entries (one per school) when present; otherwise use only LEAF
+        // componentkey divs (those that don't themselves contain nested componentkey
+        // education divs).
+        let sduiEdu = [...root.querySelectorAll('li[data-view-name*="education"], li[data-view-name*="profile-component-entity"]')];
+        if (sduiEdu.length === 0) {
+          const allCk = [...root.querySelectorAll('div[componentkey*="education"], div[componentkey*="Education"]')];
+          sduiEdu = allCk.filter(d => !d.querySelector('div[componentkey*="education"], div[componentkey*="Education"]'));
+          if (sduiEdu.length === 0) sduiEdu = allCk; // last resort
+        }
         for (const entry of sduiEdu) {
-          const ps = [...entry.querySelectorAll('p')].map(p => normalize(p.textContent)).filter(t => t.length > 1 && !isUiNoise(t));
+          const ps = [...entry.querySelectorAll('p')]
+            .map(p => normalize(p.textContent))
+            .filter(t => t.length > 1 && !isUiNoise(t) && !/^skills?:/i.test(t));
           const school = ps.find(t => !/\d{4}/.test(t)) || '';
           const datesRaw = ps.find(t => /\d{4}/.test(t)) || '';
           const nonSchoolNonDate = ps.filter(t => t !== school && !/\d{4}/.test(t));
@@ -3179,6 +3428,10 @@ async function enrichWithDetailPages(tabId, profileData, options = {}) {
         const company = (e.company || '').trim();
         if (!title && !company) return false;
         if (isLikelyUiNoise(title) || isLikelyUiNoise(company)) return false;
+        // Reject feed-post garbage: no company+dates with long title, or noise signals
+        if (!company && !e.dates && title.length > 60) return false;
+        if (/reacted|reposted|commented|and \d+ others|lnkd\.in|https?:\/\//i.test(
+          title + ' ' + company + ' ' + (e.description || ''))) return false;
         return true;
       }).length;
     }
@@ -3299,30 +3552,62 @@ async function enrichWithDetailPages(tabId, profileData, options = {}) {
     // Replace inline data if detail page results are better quality
     if (result?.items?.length > 0) {
       const inlineItems = profileData[section] || [];
-      const inlineCount = inlineItems.length;
-      const inlineValid = countValidItems(section, inlineItems);
+      let inlineCount = inlineItems.length;
+      let inlineValid = countValidItems(section, inlineItems);
       const detailValid = countValidItems(section, result.items);
       const detailRatio = result.items.length > 0 ? (detailValid / result.items.length) : 0;
       const minRatio = section === 'skills' ? 0.45 : 0.6;
       console.log(`[LinkedIn AI] Detail ${section}: ${result.items.length} items (inline had ${inlineCount})`);
 
-      // Detect if inline data is known garbage (scraper noise patterns)
-      const inlineIsGarbage = (() => {
-        if (section === 'certifications') {
-          return inlineItems.some(c =>
-            /^view\s+analytics$/i.test(c.issuer || '') ||
-            /and\s+\d+\s+others?$/i.test(c.name || '') ||
-            /^view\s+analytics$/i.test(c.name || '')
-          );
-        }
-        if (section === 'education') {
-          return inlineItems.every(e => !e.degree && !e.fieldOfStudy);
-        }
-        return false;
-      })();
+      // Detect if inline data is garbage, and if so whether it's a few bad
+      // entries mixed with good ones (filter them out) or the whole set is bad
+      // (replace wholesale with detail page data).
+      const isBadExpItem = (e) =>
+        (!e.company && !e.dates && (e.title || '').length > 60) ||
+        /reacted|reposted|commented|and \d+ others/i.test(
+          (e.title || '') + ' ' + (e.description || '') + ' ' + (e.company || '')
+        ) ||
+        /https?:\/\/|lnkd\.in/i.test((e.title || '') + ' ' + (e.company || ''));
 
-      const passesGate = (result.items.length > inlineCount && detailValid >= inlineValid && detailRatio >= minRatio)
-        || (inlineIsGarbage && detailValid > 0 && detailRatio >= minRatio);
+      const isBadEduItem = (e) => !e.school || (!e.degree && !e.fieldOfStudy);
+
+      let inlineIsGarbage = false;
+      if (section === 'certifications') {
+        inlineIsGarbage = inlineItems.some(c =>
+          /^view\s+analytics$/i.test(c.issuer || '') ||
+          /and\s+\d+\s+others?$/i.test(c.name || '') ||
+          /^view\s+analytics$/i.test(c.name || '')
+        );
+      } else if (section === 'experience') {
+        const badCount = inlineItems.filter(isBadExpItem).length;
+        // If only a minority of items are bad, just strip them from inline
+        // instead of throwing away the whole (likely larger/better) inline set.
+        if (badCount > 0 && badCount < inlineItems.length) {
+          profileData[section] = inlineItems.filter(e => !isBadExpItem(e));
+          // Recompute inline counts after cleanup
+          inlineValid = countValidItems(section, profileData[section]);
+          inlineCount = profileData[section].length;
+        } else if (badCount > 0 && badCount === inlineItems.length) {
+          inlineIsGarbage = true;
+        }
+      } else if (section === 'education') {
+        const badCount = inlineItems.filter(isBadEduItem).length;
+        if (badCount > 0 && badCount < inlineItems.length) {
+          profileData[section] = inlineItems.filter(e => !isBadEduItem(e));
+          inlineValid = countValidItems(section, profileData[section]);
+          inlineCount = profileData[section].length;
+        } else if (badCount > 0 && badCount === inlineItems.length) {
+          inlineIsGarbage = true;
+        }
+      }
+
+      // Quality gate: replace inline if detail data is valid.
+      // If inline is confirmed garbage (feed posts, no company/dates), ALWAYS take detail.
+      // Otherwise: take detail if it has at least as many valid items as inline.
+      console.log(`[GapEnrich] ${section}: detail=${result.items.length} detailValid=${detailValid} detailRatio=${detailRatio.toFixed(2)} | inline=${inlineCount} inlineValid=${inlineValid} | isGarbage=${inlineIsGarbage}`);
+      const passesGate = inlineIsGarbage
+        ? (detailValid > 0)
+        : (detailValid >= inlineValid && detailRatio >= minRatio);
 
       if (passesGate) {
         if (inlineIsGarbage) console.log(`[LinkedIn AI] Replacing garbage inline ${section} with detail data`);
@@ -4106,7 +4391,7 @@ function initProfileTab() {
   document.getElementById('copyProfBtn').addEventListener('click', () => clipCopy('profOutText', 'copyProfBtn'));
   document.getElementById('analyzeBtn').addEventListener('click', analyzeProfile);
   document.getElementById('aiScoreBtn').addEventListener('click', runAiProfileScore);
-  document.getElementById('aiScoreExportBtn').addEventListener('click', () => exportElementAsImage('aiScoreCard', 'linkedin-ai-profile-score.png'));
+  document.getElementById('aiScoreExportBtn').addEventListener('click', () => exportAiScoreCardAsImage('linkedin-ai-profile-score.png'));
 
   const allBox = document.getElementById('genAll');
   const boxes = ['genHeadline', 'genAbout', 'genExp', 'genSkills'];
@@ -4934,6 +5219,8 @@ function applyI18n(lang) {
   if (scoreTitle && T.profileStrengthTitle) scoreTitle.textContent = T.profileStrengthTitle;
   const scoreHint = document.querySelector('#page-profile .score-card-hint');
   if (scoreHint && T.profileStrengthHint) scoreHint.textContent = T.profileStrengthHint;
+  const scoreSubtitle = $('scoreCardSubtitle');
+  if (scoreSubtitle && T.profileStrengthSubtitle) scoreSubtitle.textContent = T.profileStrengthSubtitle;
   const currentLbl = document.querySelector('#scoreBeforePanel .score-label');
   if (currentLbl && T.currentProfileLabel) currentLbl.textContent = T.currentProfileLabel;
   const afterLbl = document.querySelector('#scoreAfterPanel .score-label');
@@ -5106,7 +5393,6 @@ function applyI18n(lang) {
   if (gapIdleTitle && T.gapIdleTitle) gapIdleTitle.textContent = T.gapIdleTitle;
   // Mode tabs
   setText('gapModeProfile', 'gapModeProfile');
-  setText('gapModeJD',      'gapModeJD');
   setText('gapModeJob',     'gapModeJob');
   // Idle hints & buttons
   setText('gapIdleHint', 'gapIdleHint');
@@ -5173,8 +5459,6 @@ function applyI18n(lang) {
   });
   // Gap result action buttons
   setText('gapInterviewBtn',  'gapInterviewBtn');
-  setText('gapSummaryToggle', 'gapSummaryToggle');
-  setText('gapPdfBtn',        'gapPdfBtn');
   setText('gapExportBtn',     'gapExportBtn');
   setText('gapResetBtn',      'gapResetBtn');
   setText('gapCacheTag',      'gapCachedResult');
@@ -5432,6 +5716,20 @@ async function _loadChatHistory() {
   return [];
 }
 
+// Clears in-memory history, persisted storage, and the rendered messages,
+// then shows the welcome message + suggestions again — like starting a
+// fresh conversation. Older messages are not sent as context after this.
+async function _clearChatHistory() {
+  _chatHistory = [];
+  try {
+    await chrome.storage.local.remove(_CHAT_STORAGE_KEY);
+  } catch {}
+  const msgs = document.getElementById('chatMessages');
+  if (msgs) msgs.innerHTML = '';
+  appendChatBubble('ai', "Hi! I'm your LinkedIn AI copilot. Ask me to write a post, improve your profile, or explain how any feature works. Not sure where to start? Tap a suggestion below.");
+  _renderChatSuggestions();
+}
+
 const _CHAT_SUGGESTIONS = [
   'How do I use the extension?',
   'Write a post about my latest project',
@@ -5493,6 +5791,21 @@ async function initChat() {
     guideClose.addEventListener('click', () => {
       guidePanel.style.display = 'none';
       guideBtn?.classList.remove('active');
+    });
+  }
+
+  // New Chat — clears local history/storage and resets the conversation
+  const newChatBtn = document.getElementById('chatNewBtn');
+  if (newChatBtn) {
+    newChatBtn.addEventListener('click', async () => {
+      if (_chatHistory.length === 0) return; // nothing to clear
+      const ok = await confirmDialog(
+        'Start New Chat',
+        'This will clear the current conversation. This cannot be undone.',
+        { okText: 'Start New Chat', danger: true }
+      );
+      if (!ok) return;
+      await _clearChatHistory();
     });
   }
   // Clicking a guide example actually sends it — no more silent prefill
@@ -6027,7 +6340,9 @@ function scoreLabel(score) {
 
 
 // ── AI DEEP PROFILE ANALYSIS (with 24h cache + offline fallback) ──
+let _lastRenderedAiScoreData = null;
 function _renderAiScoreData(d) {
+  _lastRenderedAiScoreData = d;
   // Hide empty state when results are shown
   const emptyState = document.getElementById('aiDeepEmptyState');
   if (emptyState) emptyState.style.display = 'none';
@@ -6125,7 +6440,11 @@ function _renderProgress(d) {
   const date     = p.previous_date || '';
 
   const color  = delta > 0 ? '#22c55e' : delta < 0 ? '#ef4444' : '#6b7280';
-  const icon   = delta > 0 ? '📈' : delta < 0 ? '📉' : '➡️';
+  const icon   = delta > 0
+    ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`
+    : delta < 0
+    ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>`
+    : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`;
   const label  = delta > 0
     ? window._t('progressUp').replace('{{delta}}', delta)
     : delta < 0
@@ -6141,7 +6460,7 @@ function _renderProgress(d) {
   panel.id = 'progressPanel';
   panel.style.cssText = 'margin-top:10px;padding:10px 12px;background:var(--bg2);border-radius:10px;border:1px solid var(--bd);display:flex;align-items:center;gap:10px';
   panel.innerHTML = `
-    <span style="font-size:18px">${icon}</span>
+    <span style="display:inline-flex;align-items:center">${icon}</span>
     <div style="flex:1">
       <div style="font-size:11px;font-weight:700;color:${color}">${esc(label)}</div>
       <div style="font-size:10px;color:var(--tx2);margin-top:2px">
@@ -6181,10 +6500,10 @@ function _renderAgentExtras(d) {
   // ── Deep Diagnostic block (only when score < 35) ──────────
   const diagHtml = diag ? `
     <div style="margin-top:12px;padding:10px;background:rgba(239,68,68,0.08);border-left:3px solid #ef4444;border-radius:6px">
-      <div style="font-size:11px;font-weight:700;color:#ef4444;margin-bottom:6px">⚠ Deep Diagnostic — Profile needs foundational work</div>
+      <div style="font-size:11px;font-weight:700;color:#ef4444;margin-bottom:6px;display:flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Deep Diagnostic — Profile needs foundational work</div>
       <div style="font-size:11px;color:var(--tx2);margin-bottom:6px;font-style:italic">${esc(diag.honest_assessment||'')}</div>
       ${(diag.root_causes||[]).map(c =>
-        `<div style="font-size:11px;color:var(--tx2);margin-bottom:2px">🔴 ${esc(c)}</div>`
+        `<div style="font-size:11px;color:var(--tx2);margin-bottom:2px;display:flex;align-items:flex-start;gap:6px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#ef4444;margin-top:5px;flex-shrink:0"></span><span>${esc(c)}</span></div>`
       ).join('')}
       ${(diag.critical_missing||[]).length ? `
         <div style="margin-top:6px;font-size:11px;font-weight:600;color:var(--tx)">Critical missing:</div>
@@ -6202,7 +6521,7 @@ function _renderAgentExtras(d) {
   const actions = (reco?.priority_actions||[]).slice(0,3);
   const actionsHtml = actions.length ? `
     <div style="margin-top:12px">
-      <div style="font-size:11px;font-weight:700;margin-bottom:6px">🎯 Priority Actions</div>
+      <div style="font-size:11px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="var(--tx)"/></svg> Priority Actions</div>
       ${actions.map(a => `
         <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 10px;background:var(--bg);border-radius:8px;margin-bottom:5px;gap:8px;border:1px solid var(--bd)">
           <div style="flex:1">
@@ -6221,7 +6540,7 @@ function _renderAgentExtras(d) {
   // ── 30-Day Plan ────────────────────────────────────────────
   const planHtml = reco?.['30_day_plan'] ? `
     <div style="margin-top:12px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--bd)">
-      <div style="font-size:11px;font-weight:700;margin-bottom:6px">📅 30-Day Plan</div>
+      <div style="font-size:11px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> 30-Day Plan</div>
       <div style="font-size:11px;color:var(--tx2);white-space:pre-line;line-height:1.5">${esc(reco['30_day_plan'])}</div>
     </div>` : '';
 
@@ -6236,8 +6555,9 @@ function _renderAgentExtras(d) {
 
   // ── Motivational insight ───────────────────────────────────
   const motivHtml = reco?.motivational_insight ? `
-    <div style="margin-top:10px;padding:8px;border-top:1px solid var(--bd);font-size:11px;color:var(--tx2);font-style:italic;text-align:center">
-      💡 ${esc(reco.motivational_insight)}
+    <div style="margin-top:10px;padding:8px;border-top:1px solid var(--bd);font-size:11px;color:var(--tx2);font-style:italic;text-align:center;display:flex;align-items:center;justify-content:center;gap:5px">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.5.4.8 1 .8 1.7v.6h6.4v-.6c0-.7.3-1.3.8-1.7A7 7 0 0 0 12 2z"/></svg>
+      <span>${esc(reco.motivational_insight)}</span>
     </div>` : '';
 
   // ── Assemble panel ─────────────────────────────────────────
@@ -6246,7 +6566,7 @@ function _renderAgentExtras(d) {
   panel.style.cssText = 'margin-top:14px;padding:12px;background:var(--bg2);border-radius:10px;border:1px solid var(--bd)';
   panel.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <span style="font-size:11px;font-weight:700;color:var(--tx)">🤖 Agent Workflow</span>
+      <span style="font-size:11px;font-weight:700;color:var(--tx);display:flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><line x1="12" y1="7" x2="12" y2="11"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg> Agent Workflow</span>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">${pathHtml}</div>
     ${diagHtml}
@@ -6353,126 +6673,643 @@ async function runAiProfileScore() {
 }
 
 // ── EXPORT: Generate a formatted text report and download as HTML or copy to clipboard ──
+// ── EXPORT: AI Deep Analysis score card as a downloadable PNG ──
+// Draws the score directly onto a <canvas> using the actual result data
+// (not the gap-analysis exporter, which reads different DOM ids and was
+// previously wired here by mistake, producing an empty/wrong export).
+function exportAiScoreCardAsImage(filename) {
+  const btn = document.getElementById('aiScoreExportBtn');
+  const d = _lastRenderedAiScoreData;
+
+  if (!d) {
+    if (btn) {
+      const prevText = btn.textContent;
+      btn.textContent = 'No analysis to export yet';
+      setTimeout(() => { btn.textContent = prevText; }, 2000);
+    }
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Building image...'; }
+
+  try {
+    const W = 640;
+    const PAD = 32;
+    const score = d.overall_score || 0;
+    const grade = d.grade || 'N/A';
+    const summary = d.summary || '';
+    const sectionOrder = ['headline', 'about', 'experience', 'skills', 'education', 'network_readiness'];
+    const sectionLabels = { headline: 'Headline', about: 'About', experience: 'Experience', skills: 'Skills', education: 'Education', network_readiness: 'Network Readiness' };
+    const sectionColors = { headline: '#f97316', about: '#3b82f6', experience: '#22c55e', skills: '#8b5cf6', education: '#f59e0b', network_readiness: '#ec4899' };
+    const sectionsToDraw = sectionOrder.filter(k => d.sections && d.sections[k]);
+    const strengths = (d.strengths || []).slice(0, 4);
+
+    // Wrap helper for long text
+    function wrapText(ctx, text, maxWidth) {
+      const words = String(text).split(' ');
+      const lines = [];
+      let line = '';
+      for (const w of words) {
+        const test = line ? line + ' ' + w : w;
+        if (ctx.measureText(test).width > maxWidth && line) {
+          lines.push(line);
+          line = w;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+      return lines;
+    }
+
+    // First pass on an offscreen canvas to measure summary height
+    const measureCanvas = document.createElement('canvas');
+    const mctx = measureCanvas.getContext('2d');
+    mctx.font = '14px -apple-system, Segoe UI, Arial, sans-serif';
+    const summaryLines = summary ? wrapText(mctx, summary, W - PAD * 2) : [];
+
+    const headerH = 150;
+    const summaryH = summaryLines.length ? (summaryLines.length * 20 + 24) : 0;
+    const sectionRowH = 54;
+    const sectionsH = sectionsToDraw.length * sectionRowH + 36;
+    const strengthsH = strengths.length ? 56 : 0;
+    const footerH = 40;
+    const H = headerH + summaryH + sectionsH + strengthsH + footerH + PAD;
+
+    const canvas = document.createElement('canvas');
+    const scale = 2; // crisp on retina
+    canvas.width = W * scale;
+    canvas.height = H * scale;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+
+    // Background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+
+    let y = PAD;
+
+    // Header: grade badge + score ring (drawn as arc) + title
+    const gradeColors = { 'A+': '#057642', 'A': '#057642', 'B': '#0a66c2', 'C': '#D4830A', 'D': '#cc1016', 'F': '#cc1016', 'N/A': '#888' };
+    const gColor = gradeColors[grade] || '#888';
+
+    // Grade badge
+    ctx.fillStyle = gColor + '1a';
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(PAD, y, 90, 90, 16) : ctx.rect(PAD, y, 90, 90);
+    ctx.fill();
+    ctx.fillStyle = gColor;
+    ctx.font = '700 36px -apple-system, Segoe UI, Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(grade, PAD + 45, y + 45);
+    ctx.font = '600 11px -apple-system, Segoe UI, Arial, sans-serif';
+    ctx.fillText('GRADE', PAD + 45, y + 70);
+
+    // Score ring (simple arc)
+    const ringCx = W - PAD - 45;
+    const ringCy = y + 45;
+    const ringR = 42;
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = '#e8e8ec';
+    ctx.beginPath();
+    ctx.arc(ringCx, ringCy, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = gColor;
+    ctx.beginPath();
+    ctx.arc(ringCx, ringCy, ringR, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * Math.min(score, 100) / 100));
+    ctx.stroke();
+    ctx.fillStyle = '#1a1a2e';
+    ctx.font = '700 26px -apple-system, Segoe UI, Arial, sans-serif';
+    ctx.fillText(String(score), ringCx, ringCy - 4);
+    ctx.font = '600 10px -apple-system, Segoe UI, Arial, sans-serif';
+    ctx.fillStyle = '#888';
+    ctx.fillText('/ 100', ringCx, ringCy + 16);
+
+    // Title
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#1a1a2e';
+    ctx.font = '700 18px -apple-system, Segoe UI, Arial, sans-serif';
+    ctx.fillText('AI Profile Score', PAD + 110, y + 40);
+    ctx.fillStyle = '#888';
+    ctx.font = '500 12px -apple-system, Segoe UI, Arial, sans-serif';
+    ctx.fillText(d.profile_type || 'Subul IN', PAD + 110, y + 62);
+
+    y += headerH;
+
+    // Summary
+    if (summaryLines.length) {
+      ctx.fillStyle = '#f8f8fa';
+      ctx.fillRect(PAD - 4, y - 4, W - (PAD - 4) * 2, summaryH);
+      ctx.strokeStyle = '#6941c6';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(PAD - 4, y - 4);
+      ctx.lineTo(PAD - 4, y - 4 + summaryH);
+      ctx.stroke();
+      ctx.fillStyle = '#444';
+      ctx.font = 'italic 14px -apple-system, Segoe UI, Arial, sans-serif';
+      summaryLines.forEach((line, i) => ctx.fillText(line, PAD + 10, y + 16 + i * 20));
+      y += summaryH;
+    }
+
+    // Section scores
+    ctx.fillStyle = '#1a1a2e';
+    ctx.font = '700 14px -apple-system, Segoe UI, Arial, sans-serif';
+    ctx.fillText('Section Scores', PAD, y + 10);
+    y += 30;
+
+    sectionsToDraw.forEach(key => {
+      const s = d.sections[key];
+      const sc = s.score || 0;
+      const color = sc >= 70 ? '#057642' : sc >= 40 ? '#D4830A' : '#cc1016';
+      ctx.fillStyle = '#333';
+      ctx.font = '600 13px -apple-system, Segoe UI, Arial, sans-serif';
+      ctx.fillText(sectionLabels[key] || key, PAD, y);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = color;
+      ctx.font = '700 13px -apple-system, Segoe UI, Arial, sans-serif';
+      ctx.fillText(String(sc), W - PAD, y);
+      ctx.textAlign = 'left';
+
+      // bar
+      const barY = y + 8;
+      const barW = W - PAD * 2;
+      ctx.fillStyle = '#eef0f3';
+      ctx.fillRect(PAD, barY, barW, 6);
+      ctx.fillStyle = sectionColors[key] || '#6941c6';
+      ctx.fillRect(PAD, barY, barW * Math.min(sc, 100) / 100, 6);
+
+      y += sectionRowH;
+    });
+
+    // Strengths
+    if (strengths.length) {
+      ctx.fillStyle = '#1a1a2e';
+      ctx.font = '700 14px -apple-system, Segoe UI, Arial, sans-serif';
+      ctx.fillText('Strengths', PAD, y + 10);
+      y += 30;
+      let px = PAD;
+      ctx.font = '600 12px -apple-system, Segoe UI, Arial, sans-serif';
+      strengths.forEach(s => {
+        const text = String(s);
+        const tw = ctx.measureText(text).width + 24;
+        if (px + tw > W - PAD) { px = PAD; y += 30; }
+        ctx.fillStyle = '#f0ebff';
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect(px, y, tw, 24, 12) : ctx.rect(px, y, tw, 24);
+        ctx.fill();
+        ctx.fillStyle = '#6941c6';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, px + 12, y + 13);
+        ctx.textBaseline = 'alphabetic';
+        px += tw + 8;
+      });
+      y += 36;
+    }
+
+    // Footer
+    ctx.fillStyle = '#aaa';
+    ctx.font = '500 11px -apple-system, Segoe UI, Arial, sans-serif';
+    ctx.fillText(`Generated by Subul IN — ${new Date().toLocaleDateString()}`, PAD, y + 16);
+
+    // Export to PNG and trigger download
+    canvas.toBlob(blob => {
+      if (!blob) throw new Error('Canvas produced no image data');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || 'linkedin-ai-profile-score.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+
+      if (btn) btn.textContent = 'Image saved!';
+      setTimeout(() => { if (btn) { btn.textContent = 'Export as Image'; btn.disabled = false; } }, 2000);
+    }, 'image/png');
+
+  } catch (e) {
+    console.error('AI score image export error:', e);
+    if (btn) { btn.textContent = 'Export failed'; btn.disabled = false; }
+    setTimeout(() => { if (btn) btn.textContent = 'Export as Image'; }, 2000);
+  }
+}
+
+// ── EXPORT: Job Fit Analysis as PDF (via export.html tab, like Gap Analysis) ──
+// jfPdfBtn previously called window.print() directly on the popup, which is
+// unreliable in a Chrome extension popup (tiny fixed viewport, and the
+// print dialog stealing focus can close the popup before printing happens).
+// This follows the same working pattern as the profile-vs-profile gap
+// analysis export: build clean report HTML, stash it, open a real tab,
+// print from there.
+async function exportJobFitAsPdf() {
+  const btn = document.getElementById('jfPdfBtn');
+  const d = _lastJobFitData;
+  const job = _lastJobFitJob || {};
+
+  if (!d) {
+    if (btn) {
+      const prevText = btn.textContent;
+      btn.textContent = 'No analysis to export yet';
+      setTimeout(() => { btn.textContent = prevText; }, 2000);
+    }
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Building PDF...'; }
+
+  try {
+    const score = Math.max(0, Math.min(100, d.fit_score || 0));
+    const jobName = [job.title, job.company].filter(Boolean).join(' @ ') || 'Job Opportunity';
+    const scoreColor = score >= 70 ? '#22c55e' : score >= 45 ? '#0a66c2' : '#f59e0b';
+    const date = new Date().toLocaleDateString();
+
+    const fits = d.why_youre_a_fit || [];
+    const critGaps = d.critical_gaps || [];
+    const niceGaps = d.nice_to_have_gaps || [];
+    const cv = d.cv_tailoring || {};
+    const role = d.role_analysis || {};
+    const priorities = d.priority_improvements || [];
+    const interviewQs = d.interview_likely_questions || [];
+    const coverPoints = d.cover_letter_talking_points || [];
+    const redFlags = d.red_flags || [];
+    const keywords = [...(cv.keywords_missing || []), ...(cv.skills_to_highlight || [])];
+
+    const sevClass = sev => sev === 'Blocking' ? '#cc1016' : sev === 'High' ? '#D4830A' : '#888';
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Job Fit Analysis — ${esc(jobName)}</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1a1a2e; background: #fff; line-height: 1.55; }
+  h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #555; margin: 18px 0 8px; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; }
+  .header { display: flex; align-items: center; justify-content: space-between; background: #f0f4ff; border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; }
+  .job-name { font-size: 16px; font-weight: 800; }
+  .score-box { display: flex; flex-direction: column; align-items: center; }
+  .score { font-size: 38px; font-weight: 900; color: ${scoreColor}; line-height: 1; }
+  .score-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #666; margin-top: 2px; }
+  .verdict-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 12px; background: #eef0f3; color: #333; margin-bottom: 10px; }
+  .coaching { font-size: 12px; color: #444; margin-bottom: 12px; font-style: italic; }
+  .fit-point, .nice-gap, .cover-point { font-size: 12px; padding: 3px 0; }
+  .gap-card { border-radius: 8px; background: #f8fafc; padding: 10px 12px; margin-bottom: 8px; border-left: 4px solid #888; }
+  .gap-req { font-weight: 700; font-size: 12px; }
+  .gap-detail { font-size: 12px; color: #444; margin-top: 3px; }
+  .gap-action { font-size: 11px; color: #0a66c2; margin-top: 4px; }
+  .role-row { display: flex; gap: 8px; font-size: 12px; padding: 3px 0; }
+  .role-label { font-weight: 700; min-width: 130px; color: #555; }
+  .priority-card { display: flex; gap: 10px; margin-bottom: 8px; }
+  .priority-rank { font-weight: 800; color: #0a66c2; font-size: 14px; }
+  .priority-action { font-size: 12px; font-weight: 600; }
+  .priority-meta { font-size: 10px; color: #888; margin-top: 2px; }
+  .kw-chip { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 10px; background: #dbeafe; color: #1e40af; margin: 2px; }
+  .interview-q { font-size: 12px; padding: 4px 0; }
+  .red-flag { font-size: 12px; color: #cc1016; padding: 3px 0; }
+  .cv-label { font-weight: 700; font-size: 11px; color: #555; text-transform: uppercase; margin-top: 8px; display: block; }
+  .cv-value { font-size: 12px; margin: 3px 0 8px; }
+  .bullet-rewrite { background: #f8fafc; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; }
+  .bullet-before { font-size: 11px; color: #888; text-decoration: line-through; }
+  .bullet-after { font-size: 12px; color: #057642; font-weight: 600; }
+  .footer { margin-top: 20px; padding-top: 10px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 10px; color: #999; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="job-name">${esc(jobName)}</div>
+    ${d.application_verdict ? `<div class="verdict-badge">${esc(d.application_verdict)}</div>` : ''}
+  </div>
+  <div class="score-box">
+    <div class="score">${score}%</div>
+    <div class="score-lbl">${esc(d.fit_label || 'Fit Score')}</div>
+  </div>
+</div>
+
+${d.overall_coaching_note ? `<div class="coaching">${esc(d.overall_coaching_note)}</div>` : ''}
+
+${fits.length ? `<h2>Why You're a Fit</h2>${fits.map(p => `<div class="fit-point">✓ ${esc(p)}</div>`).join('')}` : ''}
+
+${critGaps.length ? `<h2>Critical Gaps</h2>${critGaps.map(g => `
+<div class="gap-card" style="border-left-color:${sevClass(g.severity)}">
+  <div class="gap-req">${esc(g.requirement || '')}</div>
+  <div class="gap-detail">${esc(g.gap || '')}</div>
+  ${g.how_to_address ? `<div class="gap-action">Fix: ${esc(g.how_to_address)}</div>` : ''}
+</div>`).join('')}` : ''}
+
+${niceGaps.length ? `<h2>Nice-to-Have Gaps</h2>${niceGaps.map(g => `<div class="nice-gap">○ ${esc(g)}</div>`).join('')}` : ''}
+
+${(role.domain || role.seniority_fit) ? `<h2>Role Analysis</h2>
+<div class="role-row"><span class="role-label">Domain</span><span>${esc(role.domain || '')}</span></div>
+<div class="role-row"><span class="role-label">Seniority Required</span><span>${esc(role.seniority_required || '')}</span></div>
+<div class="role-row"><span class="role-label">Your Seniority</span><span>${esc(role.seniority_candidate || '')}</span></div>
+<div class="role-row"><span class="role-label">Seniority Fit</span><span>${esc(role.seniority_fit || '')}</span></div>` : ''}
+
+${priorities.length ? `<h2>Priority Improvements</h2>${priorities.map(p => `
+<div class="priority-card">
+  <div class="priority-rank">${esc(String(p.rank || ''))}</div>
+  <div>
+    <div class="priority-action">${esc(p.action || '')}</div>
+    <div class="priority-meta">${esc(p.timeframe || '')} ${p.impact ? '· ' + esc(p.impact) : ''}</div>
+  </div>
+</div>`).join('')}` : ''}
+
+${(cv.headline || cv.about_opening || (cv.experience_rewrites||[]).length || keywords.length) ? `<h2>CV Tailoring</h2>
+${cv.headline ? `<span class="cv-label">Headline</span><div class="cv-value">${esc(cv.headline)}</div>` : ''}
+${cv.about_opening ? `<span class="cv-label">About Opening</span><div class="cv-value">${esc(cv.about_opening)}</div>` : ''}
+${(cv.experience_rewrites || []).map(r => `
+<div class="bullet-rewrite">
+  <div style="font-weight:700;font-size:11px;">${esc(r.role || '')}</div>
+  <div class="bullet-before">Before: ${esc(r.bullet_to_rewrite || '')}</div>
+  <div class="bullet-after">After: ${esc(r.rewritten || '')}</div>
+</div>`).join('')}
+${keywords.length ? `<span class="cv-label">Keywords</span>${keywords.map(k => `<span class="kw-chip">${esc(k)}</span>`).join('')}` : ''}` : ''}
+
+${interviewQs.length ? `<h2>Likely Interview Questions</h2>${interviewQs.map((q,i) => `<div class="interview-q">Q${i+1}: ${esc(q)}</div>`).join('')}` : ''}
+
+${coverPoints.length ? `<h2>Cover Letter Talking Points</h2>${coverPoints.map(p => `<div class="cover-point">→ ${esc(p)}</div>`).join('')}` : ''}
+
+${redFlags.length ? `<h2>Red Flags</h2>${redFlags.map(f => `<div class="red-flag">⚠ ${esc(f)}</div>`).join('')}` : ''}
+
+<div class="footer">Generated by Subul IN — ${date}</div>
+
+</body>
+</html>`;
+
+    await chrome.storage.local.set({ _gapExportHtml: html });
+    const exportUrl = chrome.runtime.getURL('popup/export.html');
+    chrome.tabs.create({ url: exportUrl });
+
+    if (btn) btn.textContent = 'PDF ready!';
+    setTimeout(() => { if (btn) { btn.textContent = 'Print / PDF'; btn.disabled = false; } }, 3000);
+
+  } catch (e) {
+    console.error('Job fit PDF export error:', e);
+    if (btn) { btn.textContent = 'Export failed'; btn.disabled = false; }
+    setTimeout(() => { if (btn) btn.textContent = 'Print / PDF'; }, 2000);
+  }
+}
+
 async function exportElementAsImage(elementId, filename) {
   const el = document.getElementById(elementId);
   if (!el) return;
 
-  const btn = document.querySelector(`#${elementId} .export-btn, [onclick*="${elementId}"]`) || event?.target;
-  if (btn) { btn.disabled = true; btn.textContent = 'Exporting...'; }
+  const btn = document.getElementById('gapExportBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Building PDF...'; }
 
   try {
-    const isDark = document.body.classList.contains('dark');
+    // ── Collect all text data from the rendered DOM ──
+    const getT = id => (document.getElementById(id)?.textContent || '').trim();
 
-    // Clone and clean the element
-    const clone = el.cloneNode(true);
-    clone.querySelectorAll('.export-btn, .gap-reset-btn, .cache-tag, .gap-export-row').forEach(b => b.remove());
+    // Header names
+    const youName  = document.getElementById('gapYouName')?.textContent?.trim()  || 'You';
+    const themName = document.getElementById('gapThemName')?.textContent?.trim() || 'Them';
+    const youRole  = document.getElementById('gapYouRole')?.textContent?.trim()  || '';
+    const themRole = document.getElementById('gapThemRole')?.textContent?.trim() || '';
+    const overall  = document.getElementById('gapOverallScore')?.textContent?.trim()  || '';
+    const overallLabel = document.getElementById('gapOverallLabel')?.textContent?.trim() || 'Match Score';
+    const insight  = getT('gapInsight');
 
-    // Make all expanded rows visible in the export
-    clone.querySelectorAll('.gap-compare-row').forEach(row => row.classList.add('expanded'));
+    // Power Index rows
+    const pwrRows = [];
+    document.querySelectorAll('.gap-power-row').forEach(row => {
+      const label = row.querySelector('.gap-power-label')?.textContent?.trim() || '';
+      const youVal = row.querySelector('[id^="gapPwr"][id$="YouVal"]')?.textContent?.trim() || '–';
+      const themVal = row.querySelector('[id^="gapPwr"][id$="ThemVal"]')?.textContent?.trim() || '–';
+      const delta = row.querySelector('.gap-pwr-delta')?.textContent?.trim() || '';
+      if (label) pwrRows.push({ label, youVal, themVal, delta });
+    });
 
-    // Build a standalone HTML file with inline styles
-    const bgColor = isDark ? '#1a1a2e' : '#ffffff';
-    const textColor = isDark ? '#e2e8f0' : '#1a1a2e';
-    const ac = isDark ? '#3b82f6' : '#0a66c2';
+    // Compare sections (Headline, Skills, Experience etc.)
+    const compareSections = [];
+    document.querySelectorAll('.gap-compare-row').forEach(row => {
+      const label   = row.querySelector('.gap-compare-label')?.textContent?.trim() || '';
+      const youVal  = row.querySelector('.gap-bar-you-val')?.textContent?.trim() || '';
+      const themVal = row.querySelector('.gap-bar-them-val')?.textContent?.trim() || '';
+      const advice  = row.querySelector('.gap-compare-gap')?.textContent?.trim() || '';
+      const rewrite = row.querySelector('.gap-rewrite-box')?.textContent?.trim() || '';
+      const pills   = Array.from(row.querySelectorAll('.gap-pill')).map(p => p.textContent.trim());
+      if (label) compareSections.push({ label, youVal, themVal, advice, rewrite, pills });
+    });
 
-    const htmlDoc = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${filename.replace('.png', '')}</title>
+    // H2H
+    const h2hYou    = Array.from(document.querySelectorAll('#gapH2HUserWins .gap-h2h-item')).map(e => e.textContent.trim());
+    const h2hThem   = Array.from(document.querySelectorAll('#gapH2HTargetWins .gap-h2h-item')).map(e => e.textContent.trim());
+    const h2hTies   = Array.from(document.querySelectorAll('#gapH2HTies .gap-h2h-item')).map(e => e.textContent.trim());
+
+    // Recruiter perspective
+    const recruiter = getT('gapRecruiterText');
+
+    // Roadmap
+    const roadmapItems = Array.from(document.querySelectorAll('.gap-roadmap-item')).map(it => ({
+      week: it.querySelector('.gap-roadmap-week')?.textContent?.trim() || '',
+      title: it.querySelector('.gap-roadmap-title')?.textContent?.trim() || '',
+      actions: Array.from(it.querySelectorAll('.gap-roadmap-action')).map(a => a.textContent.trim()),
+    }));
+
+    // Strategy / messaging
+    const strategy = getT('gapStrategyMsg') || getT('gapStrategyContext') || getT('gapStrategyFollowup');
+
+    const date = new Date().toLocaleDateString();
+    const pur = '#7c3aed';
+    const org = '#e8590c';
+
+    // ── Build clean PDF HTML ──
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gap Analysis – ${youName} vs ${themName}</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
-body{background:${bgColor};color:${textColor};padding:24px;max-width:600px;margin:0 auto;font-size:13px;line-height:1.6}
-.gap-dash-header{display:flex;align-items:center;justify-content:space-between;padding:20px 16px;background:${isDark?'#16213e':'#f0f4ff'};border-radius:14px;margin-bottom:16px}
-.gap-dash-profile{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:120px}
-.gap-dash-avatar{width:48px;height:48px;border-radius:50%;background:${ac};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px}
-.gap-dash-avatar-them{background:#7c3aed}
-.gap-dash-name{font-size:14px;font-weight:700;text-align:center}
-.gap-dash-role{font-size:11px;color:${isDark?'#94a3b8':'#666'};text-align:center;max-width:140px}
-.gap-dash-vs{display:flex;flex-direction:column;align-items:center;gap:2px}
-.gap-dash-overall{font-size:36px;font-weight:900;color:${ac}}
-.gap-dash-overall.gap-high{color:#22c55e}.gap-dash-overall.gap-mid{color:#f59e0b}.gap-dash-overall.gap-low{color:#ef4444}
-.gap-dash-overall-label{font-size:11px;font-weight:700;text-transform:uppercase;color:${isDark?'#94a3b8':'#666'}}
-.gap-insight{font-size:12px;color:${ac};background:${isDark?'#1a2d3e':'#eff6ff'};border-left:3px solid ${ac};padding:10px 14px;border-radius:0 8px 8px 0;margin-bottom:12px}
-.gap-compare-grid{display:flex;flex-direction:column;gap:4px;margin-bottom:14px}
-.gap-compare-row{background:${isDark?'#16213e':'#f8fafc'};border-radius:10px;padding:12px 14px}
-.gap-compare-label{font-size:12px;font-weight:700;text-transform:uppercase;color:${isDark?'#94a3b8':'#555'};margin-bottom:8px}
-.gap-bar-pair{display:flex;align-items:center;gap:8px}
-.gap-bar-val{font-size:12px;font-weight:700;min-width:24px;text-align:center}
-.gap-bar-you-val{color:${ac}}.gap-bar-them-val{color:#7c3aed}
-.gap-bar-track{flex:1;height:8px;background:${isDark?'#2a2a4a':'#e2e8f0'};border-radius:4px;overflow:hidden}
-.gap-bar-track-right{direction:rtl}
-.gap-bar-fill{height:100%;border-radius:4px}
-.gap-bar-you{background:${ac}}.gap-bar-them{background:#7c3aed}
-.gap-compare-detail{display:block;margin-top:8px}
-.gap-compare-gap{font-size:12px;color:${isDark?'#cbd5e1':'#555'};line-height:1.6}
-.gap-rewrite-box{font-size:12px;color:${ac};background:${isDark?'#1a2d3e':'#eff6ff'};padding:8px 12px;border-radius:8px;margin-top:6px}
-.gap-rewrite-hint{font-weight:700}
-.gap-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.gap-pill{font-size:11px;padding:3px 10px;border-radius:12px;background:${isDark?'#1e3a5f':'#dbeafe'};color:${ac}}
-.gap-pills-green .gap-pill{background:${isDark?'#14532d':'#dcfce7'};color:#22c55e}
-.gap-section{padding:12px 14px;background:${isDark?'#16213e':'#f8fafc'};border-radius:10px;margin-bottom:8px}
-.gap-section-title{font-size:12px;font-weight:800;text-transform:uppercase;color:${isDark?'#94a3b8':'#555'};margin-bottom:8px}
-.gap-quick-win{font-size:12px;padding:4px 0;line-height:1.5}
-.gap-quick-win::before{content:'\\2192 ';color:${ac};font-weight:700}
-.gap-text{font-size:12px;color:${isDark?'#cbd5e1':'#555'};line-height:1.6}
-.gap-hidden{display:none!important}
-.ai-score-card{background:${isDark?'#16213e':'#f8fafc'};border:1px solid ${isDark?'#2a2a4a':'#e2e8f0'};border-radius:14px;padding:18px}
-.ai-score-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.ai-score-left{display:flex;flex-direction:column;gap:4px}
-.ai-score-grade{font-size:32px;font-weight:900;color:${ac};line-height:1}
-.ai-score-grade.grade-a{color:#22c55e}.ai-score-grade.grade-b{color:#3b82f6}.ai-score-grade.grade-c{color:#f59e0b}.ai-score-grade.grade-d{color:#ef4444}.ai-score-grade.grade-f{color:#b91c1c}
-.ai-score-type{font-size:11px;color:${isDark?'#94a3b8':'#666'};text-transform:uppercase;letter-spacing:.5px;font-weight:600}
-.ai-score-right{flex-shrink:0}
-.ai-score-ring{position:relative;width:64px;height:64px}
-.ai-score-svg{width:100%;height:100%;transform:rotate(-90deg)}
-.ai-ring-bg{fill:none;stroke:${isDark?'#2a2a4a':'#e2e8f0'};stroke-width:3}
-.ai-ring-fill{fill:none;stroke:${ac};stroke-width:3;stroke-linecap:round}
-.ai-score-num{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:18px;font-weight:800}
-.ai-score-summary{font-size:13px;color:${isDark?'#cbd5e1':'#555'};line-height:1.6;margin-bottom:12px;padding:8px 12px;background:${isDark?'#1a1a2e':'#fff'};border-radius:10px}
-.ai-score-sections{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
-.ai-sec-row{display:flex;align-items:center;gap:10px;padding:8px 10px;background:${isDark?'#1a1a2e':'#fff'};border-radius:8px}
-.ai-sec-name{font-size:11px;font-weight:700;color:${isDark?'#94a3b8':'#666'};text-transform:uppercase;width:80px;flex-shrink:0}
-.ai-sec-bar{flex:1;height:6px;background:${isDark?'#2a2a4a':'#e2e8f0'};border-radius:3px;overflow:hidden}
-.ai-sec-fill{height:100%;border-radius:3px}
-.ai-sec-val{font-size:11px;font-weight:700;min-width:24px;text-align:right}
-.ai-sec-val.good{color:#22c55e}.ai-sec-val.mid{color:#f59e0b}.ai-sec-val.bad{color:#ef4444}
-.ai-sec-verdict{font-size:11px;color:${isDark?'#94a3b8':'#666'};margin-top:3px;padding-left:90px;line-height:1.4}
-.ai-score-actions{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
-.ai-action-item{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:${isDark?'#cbd5e1':'#555'};line-height:1.5;padding:6px 10px;background:${isDark?'#1a2d3e':'#eff6ff'};border-radius:8px}
-.ai-action-num{font-weight:700;color:${ac};flex-shrink:0;min-width:16px}
-.ai-score-strengths{display:flex;flex-wrap:wrap;gap:6px}
-.ai-strength-pill{font-size:11px;padding:3px 10px;border-radius:12px;background:${isDark?'#14532d':'#dcfce7'};color:#22c55e;font-weight:500}
-.watermark{text-align:center;padding:14px 0 6px;font-size:10px;color:${isDark?'#475569':'#999'};border-top:1px solid ${isDark?'#2a2a4a':'#e2e8f0'};margin-top:16px}
-</style></head><body>
-${clone.outerHTML}
-<div class="watermark">Generated by LinkedIn AI Agent &mdash; ${new Date().toLocaleDateString()}</div>
-</body></html>`;
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1a1a2e; background: #fff; line-height: 1.55; }
+  h1 { font-size: 20px; font-weight: 800; color: #1a1a2e; margin-bottom: 4px; }
+  h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #555; margin: 18px 0 8px; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; }
+  h3 { font-size: 12px; font-weight: 700; color: #1a1a2e; margin: 10px 0 4px; }
+  .header { display: flex; align-items: center; justify-content: space-between; background: #f0f4ff; border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; }
+  .profile { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 130px; }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; color: #fff; }
+  .av-you { background: ${pur}; } .av-them { background: ${org}; }
+  .pname { font-size: 13px; font-weight: 700; text-align: center; }
+  .prole { font-size: 10px; color: #666; text-align: center; max-width: 130px; }
+  .vs-box { display: flex; flex-direction: column; align-items: center; }
+  .score { font-size: 38px; font-weight: 900; color: #0a66c2; line-height: 1; }
+  .score-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #666; margin-top: 2px; }
+  .insight-box { background: #eff6ff; border-left: 4px solid #0a66c2; border-radius: 0 8px 8px 0; padding: 10px 14px; margin-bottom: 14px; font-size: 12px; color: #1e3a5f; font-weight: 600; line-height: 1.6; }
+  /* Power Index */
+  .pwr-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+  .pwr-table th { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #999; text-align: left; padding: 0 4px 4px; }
+  .pwr-table th.right { text-align: right; }
+  .pwr-table td { padding: 5px 4px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
+  .pwr-label { font-weight: 600; color: #333; min-width: 90px; }
+  .bar-cell { width: 180px; }
+  .bar-wrap { width: 100%; height: 12px; background: #e2e8f0; border-radius: 6px; position: relative; overflow: hidden; }
+  .bar-you { position: absolute; top: 0; height: 6px; border-radius: 3px; background: linear-gradient(90deg, ${pur}, #3b5bdb); }
+  .bar-them { position: absolute; top: 6px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, ${org}, #f59e0b); }
+  .pwr-scores { text-align: right; white-space: nowrap; font-size: 11px; min-width: 50px; }
+  .val-you { color: ${pur}; font-weight: 700; }
+  .val-them { color: ${org}; font-weight: 700; }
+  .delta { font-size: 11px; font-weight: 700; min-width: 30px; text-align: right; }
+  .delta-pos { color: #22c55e; } .delta-neg { color: #ef4444; } .delta-ev { color: #999; }
+  .legend { display: flex; gap: 14px; margin-bottom: 10px; align-items: center; }
+  .leg-dot { display: inline-block; width: 14px; height: 6px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+  .leg-you { background: linear-gradient(90deg, ${pur}, #3b5bdb); }
+  .leg-them { background: linear-gradient(90deg, ${org}, #f59e0b); }
+  .leg-lbl-you { color: ${pur}; font-weight: 700; font-size: 11px; }
+  .leg-lbl-them { color: ${org}; font-weight: 700; font-size: 11px; }
+  /* Compare sections */
+  .compare-block { background: #f8fafc; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .compare-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .compare-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #555; }
+  .compare-vals { font-size: 11px; }
+  .advice { font-size: 12px; color: #444; line-height: 1.6; margin-bottom: 5px; }
+  .rewrite { font-size: 11px; background: #eff6ff; color: #1e3a5f; padding: 7px 10px; border-radius: 6px; margin-top: 5px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+  .pill { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: #dbeafe; color: #1e40af; }
+  /* H2H */
+  .h2h-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 6px; }
+  .h2h-col { background: #f8fafc; border-radius: 8px; padding: 8px 10px; }
+  .h2h-title { font-size: 10px; font-weight: 700; text-transform: uppercase; margin-bottom: 5px; }
+  .h2h-you .h2h-title { color: ${pur}; }
+  .h2h-them .h2h-title { color: ${org}; }
+  .h2h-item { font-size: 11px; color: #444; padding: 2px 0; border-bottom: 1px solid #e2e8f0; line-height: 1.5; }
+  .h2h-item:last-child { border: none; }
+  .ties-box { background: #f8fafc; border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+  /* Recruiter */
+  .recruiter-box { font-style: italic; color: #555; background: #f8fafc; padding: 10px 14px; border-radius: 8px; margin-bottom: 8px; font-size: 12px; line-height: 1.6; }
+  /* Roadmap */
+  .roadmap-item { margin-bottom: 10px; padding-left: 12px; border-left: 3px solid #0a66c2; }
+  .roadmap-week { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #0a66c2; }
+  .roadmap-title { font-size: 12px; font-weight: 700; margin: 2px 0; }
+  .roadmap-action { font-size: 11px; color: #555; padding: 1px 0 1px 10px; }
+  .roadmap-action::before { content: "→ "; color: #0a66c2; font-weight: 700; }
+  /* Footer */
+  .footer { margin-top: 20px; padding-top: 10px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 10px; color: #999; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
 
-    // Download as HTML file (works in all browsers, preserves exact styling)
-    const htmlFilename = filename.replace('.png', '.html');
-    const blob = new Blob([htmlDoc], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.download = htmlFilename;
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
+<!-- Header -->
+<div class="header">
+  <div class="profile">
+    <div class="avatar av-you">${youName.charAt(0).toUpperCase()}</div>
+    <div class="pname">${youName}</div>
+    <div class="prole">${youRole}</div>
+  </div>
+  <div class="vs-box">
+    <div class="score">${overall}</div>
+    <div class="score-lbl">${overallLabel || 'Match Score'}</div>
+  </div>
+  <div class="profile">
+    <div class="avatar av-them">${themName.charAt(0).toUpperCase()}</div>
+    <div class="pname">${themName}</div>
+    <div class="prole">${themRole}</div>
+  </div>
+</div>
 
-    // Also copy plain text summary to clipboard
-    const textContent = el.innerText.replace(/Export as Image\n?/g, '').replace(/Analyze Another\n?/g, '').trim();
-    await navigator.clipboard.writeText(textContent).catch(() => {});
+${insight ? `<div class="insight-box">${insight}</div>` : ''}
 
-    if (btn) btn.textContent = 'Exported!';
-    setTimeout(() => { if (btn) btn.textContent = 'Export as Image'; }, 2000);
+<!-- Power Index -->
+${pwrRows.length ? `
+<h2>Power Index</h2>
+<div class="legend">
+  <span><span class="leg-dot leg-you"></span><span class="leg-lbl-you">You</span></span>
+  <span><span class="leg-dot leg-them"></span><span class="leg-lbl-them">Them</span></span>
+</div>
+<table class="pwr-table">
+  <thead><tr>
+    <th>Dimension</th><th>Bars</th>
+    <th class="right">You / Them</th>
+    <th class="right">Gap</th>
+  </tr></thead>
+  <tbody>
+  ${pwrRows.map(r => {
+    const yv = parseInt(r.youVal) || 0;
+    const tv = parseInt(r.themVal) || 0;
+    const dc = r.delta.startsWith('+') ? 'delta-pos' : r.delta === '=' ? 'delta-ev' : r.delta.startsWith('-') ? 'delta-neg' : 'delta-ev';
+    return `<tr>
+      <td class="pwr-label">${r.label}</td>
+      <td class="bar-cell"><div class="bar-wrap">
+        <div class="bar-you" style="width:${yv}%"></div>
+        <div class="bar-them" style="width:${tv}%"></div>
+      </div></td>
+      <td class="pwr-scores"><span class="val-you">${r.youVal}</span> / <span class="val-them">${r.themVal}</span></td>
+      <td class="delta ${dc}">${r.delta}</td>
+    </tr>`;
+  }).join('')}
+  </tbody>
+</table>` : ''}
+
+<!-- Profile Comparison -->
+${compareSections.length ? `<h2>Profile Comparison</h2>
+${compareSections.map(s => `
+<div class="compare-block">
+  <div class="compare-header">
+    <span class="compare-label">${s.label}</span>
+    <span class="compare-vals"><span class="val-you">${s.youVal}</span> / <span class="val-them">${s.themVal}</span></span>
+  </div>
+  ${s.advice ? `<div class="advice">${s.advice}</div>` : ''}
+  ${s.rewrite ? `<div class="rewrite">${s.rewrite}</div>` : ''}
+  ${s.pills.length ? `<div class="pills">${s.pills.map(p => `<span class="pill">${p}</span>`).join('')}</div>` : ''}
+</div>`).join('')}` : ''}
+
+<!-- Head to Head -->
+${(h2hYou.length || h2hThem.length) ? `
+<h2>Head to Head</h2>
+<div class="h2h-grid">
+  <div class="h2h-col h2h-you">
+    <div class="h2h-title">Your Wins</div>
+    ${h2hYou.map(t => `<div class="h2h-item">${t}</div>`).join('')}
+  </div>
+  <div class="h2h-col h2h-them">
+    <div class="h2h-title">${themName}'s Wins</div>
+    ${h2hThem.map(t => `<div class="h2h-item">${t}</div>`).join('')}
+  </div>
+</div>
+${h2hTies.length ? `<div class="ties-box"><h3>Ties</h3>${h2hTies.map(t => `<div class="h2h-item">${t}</div>`).join('')}</div>` : ''}
+` : ''}
+
+<!-- Recruiter Perspective -->
+${recruiter ? `<h2>Recruiter Perspective</h2><div class="recruiter-box">"${recruiter}"</div>` : ''}
+
+<!-- Action Roadmap -->
+${roadmapItems.length ? `<h2>Action Roadmap</h2>
+${roadmapItems.map(r => `
+<div class="roadmap-item">
+  <div class="roadmap-week">${r.week}</div>
+  <div class="roadmap-title">${r.title}</div>
+  ${r.actions.map(a => `<div class="roadmap-action">${a}</div>`).join('')}
+</div>`).join('')}` : ''}
+
+${strategy ? `<h2>Strategy</h2><div class="advice">${strategy}</div>` : ''}
+
+<div class="footer">Generated by Subul IN &mdash; ${date}</div>
+
+</body>
+</html>`;
+
+    // Encode as base64 data URL so it works from extension popup
+    // Store HTML in chrome.storage.session then open the export page
+    await chrome.storage.local.set({ _gapExportHtml: html });
+    const exportUrl = chrome.runtime.getURL('popup/export.html');
+    chrome.tabs.create({ url: exportUrl });
+
+    if (btn) btn.textContent = 'PDF ready!';
+    setTimeout(() => { if (btn) { btn.textContent = 'Export as PDF'; btn.disabled = false; } }, 3000);
+
   } catch (e) {
-    // Fallback: just copy text
-    try {
-      await navigator.clipboard.writeText(el.innerText);
-      if (btn) btn.textContent = 'Text copied!';
-    } catch {
-      if (btn) btn.textContent = 'Export failed';
-    }
-    setTimeout(() => { if (btn) btn.textContent = 'Export as Image'; }, 2000);
-  } finally {
-    if (btn) btn.disabled = false;
+    console.error('Export error:', e);
+    if (btn) { btn.textContent = 'Export failed'; btn.disabled = false; }
+    setTimeout(() => { if (btn) btn.textContent = 'Export as PDF'; }, 2000);
   }
 }
 
@@ -6586,7 +7423,20 @@ function initAuth(onReady) {
   ];
 
   function showSubulForm() {
-    // Open Subul login page — the content script will detect login and auto-authenticate
+    // Just reveal the credential form — do NOT open a tab here. Opening a
+    // tab as a side effect of showing the form meant every click on
+    // "Continue with Subul" launched app.subul.uk even for users who only
+    // wanted to type their email/password directly, leaving a confusing
+    // tab open that nothing ever closed.
+    mainAuthEls.forEach(el => { if (el) el.style.display = 'none'; });
+    subulForm.style.display = 'block';
+    subulError.textContent  = '';
+  }
+
+  // Separate, explicit action: open app.subul.uk and auto-detect login.
+  // Only runs when the user clicks this specific link, not just for
+  // viewing/using the manual credential form.
+  function startSubulAutoLogin() {
     chrome.tabs.create({ url: 'https://app.subul.uk/', active: true }, (tab) => {
       const requestedAt = Date.now();
       chrome.storage.local.set({ subulAuthRequestedAt: requestedAt });
@@ -6594,15 +7444,11 @@ function initAuth(onReady) {
         chrome.tabs.sendMessage(tab.id, { action: 'subulStartAuth', requestedAt }, () => {});
       }
     });
-    mainAuthEls.forEach(el => { if (el) el.style.display = 'none'; });
-    subulForm.style.display = 'block';
-    subulError.textContent  = '';
-    // Update hint to explain auto-login
     const hint = document.getElementById('subulRedirectHint');
     if (hint) hint.innerHTML =
       '<p>Log in on the <strong>Subul</strong> tab that just opened.</p>' +
-      '<p style="font-size:11px;margin-top:4px;color:var(--tx2)">You\'ll be logged in automatically when you return. ' +
-      'Or enter your credentials below.</p>';
+      '<p style="font-size:11px;margin-top:4px;color:var(--tx2)">That tab will close automatically once you\'re signed in, and you\'ll get a notification — just click the extension icon again to continue. ' +
+      'Or enter your credentials below instead.</p>';
   }
 
   function hideSubulForm() {
@@ -6611,6 +7457,7 @@ function initAuth(onReady) {
   }
 
   document.getElementById('authSubulBtn').addEventListener('click', showSubulForm);
+  document.getElementById('subulAutoLoginBtn').addEventListener('click', startSubulAutoLogin);
   document.getElementById('subulBackBtn').addEventListener('click', hideSubulForm);
 
   // Listen for auto-login from the Subul content script (token relay)
@@ -7064,7 +7911,7 @@ async function runNetworkingScan() {
       return;
     }
 
-    const isValidScanPage = /linkedin\.com\/(mynetwork|search\/results\/people|search\/results\/all|connections)/.test(url);
+    const isValidScanPage = /linkedin\.com\/(mynetwork|search\/results\/people|search\/results\/all|connections|(company|school)\/[^/]+\/people)/.test(url);
     const isProfilePage   = /linkedin\.com\/in\//.test(url);
 
     if (isProfilePage) {
@@ -7092,11 +7939,70 @@ async function runNetworkingScan() {
     }
 
     // ── Stage 1: Surface scan ─────────────────────────────────────────────
-    const res = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: scrapeNetworkingCandidatesInPage,
-    });
-    const allCandidates = res?.[0]?.result || [];
+    // On mynetwork/grow (and the org/school People tab, which uses the same
+    // SDUI LazyColumn virtualization), cards are rendered in a virtualized
+    // list — only rows near the current scroll position actually exist in
+    // the DOM at any given moment; everything else is unmounted/recycled.
+    // So we must scrape AT EACH scroll step while those rows are mounted,
+    // and merge unique candidates as we go — scraping only once, after
+    // scrolling back to the top, would unmount everything we just loaded.
+    const isGrowPage = /mynetwork\/(grow|invite-connect)/i.test(tab.url || '') ||
+      /linkedin\.com\/(company|school)\/[^/]+\/people/i.test(tab.url || '');
+
+    let allCandidates = [];
+    const seenSlugsAcrossSteps = new Set();
+    const mergeStep = (stepResult) => {
+      for (const c of (stepResult || [])) {
+        if (c && c.url_slug && !seenSlugsAcrossSteps.has(c.url_slug)) {
+          seenSlugsAcrossSteps.add(c.url_slug);
+          allCandidates.push(c);
+        }
+      }
+    };
+
+    if (isGrowPage) {
+      statusEl.style.display = '';
+      statusEl.textContent = 'Scrolling page to load profile cards…';
+      const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+      // Scrape the initial (unscrolled) viewport first — this is where your
+      // diagnosis found List 2 (8 profiles) sitting above the fold.
+      const initialRes = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: scrapeNetworkingCandidatesInPage,
+      });
+      mergeStep(initialRes?.[0]?.result);
+
+      // Scroll in steps — scrape after EACH step while those rows are still
+      // mounted, then move to the next step. Never scrape after scrolling
+      // back up, or the virtualized rows we just loaded will be gone.
+      for (let i = 0; i < 6; i++) {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: (amount) => window.scrollBy(0, amount),
+          args: [500],
+        });
+        await sleep(300);
+        const stepRes = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: scrapeNetworkingCandidatesInPage,
+        });
+        mergeStep(stepRes?.[0]?.result);
+      }
+
+      // Cosmetic only — scroll back to top now that scraping is complete
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => window.scrollTo(0, 0),
+      });
+      await sleep(200);
+    } else {
+      const res = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: scrapeNetworkingCandidatesInPage,
+      });
+      mergeStep(res?.[0]?.result);
+    }
 
     if (!allCandidates.length) {
       suggestionsEl.innerHTML = `
@@ -7155,7 +8061,6 @@ async function runNetworkingScan() {
       statsBar.style.display = '';
       document.getElementById('netStatScanned').textContent   = `${allCandidates.length} scanned`;
       document.getElementById('netStatMatched').textContent   = `${topCandidates.length} selected`;
-      document.getElementById('netStatDeep').textContent      = 'analyzing...';
     }
 
     statusEl.textContent = `${allCandidates.length} people found. AI-analyzing top ${topCandidates.length}...`;
@@ -7199,8 +8104,8 @@ async function runNetworkingScan() {
 
     const cachedCount = slugs.length - missA.length;
     statusEl.textContent = cachedCount > 0
-      ? `${topCandidates.length} matches (${cachedCount} from cache). Running deep scan...`
-      : `${topCandidates.length} matches analyzed. Running deep scan...`;
+      ? `${topCandidates.length} matches (${cachedCount} from cache).`
+      : `${topCandidates.length} matches analyzed.`;
 
     // Persist scan results for resumable suggestions (expires after 24h)
     chrome.storage.local.set({
@@ -7211,7 +8116,16 @@ async function runNetworkingScan() {
       }
     }).catch(() => {});
 
-    // ── Stage 3B: Deep scan + re-analyze (background, non-blocking) ──────
+    if (statsBar) document.getElementById('netStatDeep').textContent = 'skipped (not needed)';
+    statusEl.textContent = `${topCandidates.length} matches — analysis complete`;
+
+    // ── Deep scan disabled ────────────────────────────────────────────────
+    // The shallow pass (headline + about + mutual connections, no profile
+    // visits) already produces accurate, well-grounded analysis. Opening
+    // each candidate's full profile in a background tab added 30-60s of
+    // wait time per scan without materially changing the AI's conclusions.
+    // Kept here, commented out, in case richer signals are needed later.
+    /*
     chrome.runtime.sendMessage({
       action: 'deepScanProfiles',
       data: { slugs: topCandidates.map(c => c.url_slug).filter(Boolean) },
@@ -7224,8 +8138,6 @@ async function runNetworkingScan() {
       const deepCount = Object.values(deepMap).filter(Boolean).length;
       if (statsBar) document.getElementById('netStatDeep').textContent = `${deepCount} deep scanned`;
 
-      // Enrich candidates with deep profile data — only overwrite surface fields
-      // when deep scan returned a non-empty value (prevents losing title/company from surface scan)
       const enriched = topCandidates.map((c, idx) => {
         const deep = deepMap[c.url_slug] || {};
         const merged = { ...c };
@@ -7234,11 +8146,8 @@ async function runNetworkingScan() {
             (Array.isArray(v) && v.length === 0);
           if (!isEmpty) merged[k] = v;
         }
-        // Map headline → title if title is still empty (inlineScrapeFunction returns 'headline')
         if (!merged.title && merged.headline) merged.title = merged.headline;
-        // Map first experience company → company if still empty
         if (!merged.company && merged.experience?.[0]?.company) merged.company = merged.experience[0].company;
-        // Update card title DOM immediately so user sees real headline without waiting for AI re-score
         const titleEl = document.getElementById(`net-title-${idx}`);
         if (titleEl && (merged.title || merged.company)) {
           titleEl.textContent = (merged.title || '') + (merged.company ? ' · ' + merged.company : '');
@@ -7252,7 +8161,6 @@ async function runNetworkingScan() {
       }).catch(() => null);
 
       if (dR?.success) {
-        // Deep data is richer — overwrite the shallow cache entries
         await _cacheAnalyses(dR.data || [], goal);
         const dMap = Object.fromEntries((dR.data || []).map(a => [a.slug, a]));
         enriched.forEach((c, idx) => {
@@ -7266,6 +8174,7 @@ async function runNetworkingScan() {
     }).catch(() => {
       statusEl.textContent = `${topCandidates.length} matches — analysis complete`;
     });
+    */
 
   } catch (e) {
     statusEl.textContent = 'Error: ' + (e.message || 'Unknown error');
@@ -7694,8 +8603,12 @@ function scrapeNetworkingCandidatesInPage() {
   const isNetwork = /linkedin\.com\/mynetwork/i.test(url);
   // Also match the "grow" page (/mynetwork/grow) and generic feed with people cards
   const isGrow    = /linkedin\.com\/mynetwork\/grow/i.test(url);
+  // Company/School "People" tab — e.g. linkedin.com/school/universite-ibn-zohr/people/
+  // These pages render the same role=list / role=listitem SDUI structure as mynetwork
+  // and are full of real profile cards, so they must not be excluded here.
+  const isOrgPeople = /linkedin\.com\/(company|school)\/[^/]+\/people/i.test(url);
 
-  if (!isSearch && !isNetwork && !isGrow) return [];
+  if (!isSearch && !isNetwork && !isGrow && !isOrgPeople) return [];
 
   const candidates = [];
   const seenSlugs = new Set();
@@ -7722,8 +8635,33 @@ function scrapeNetworkingCandidatesInPage() {
     return '';
   };
 
+  // Detect LinkedIn game/ad widget cards (Wend, Zip, etc.)
+  // These appear in the mynetwork/grow feed but are NOT real people
+  const isAdOrGameCard = (card) => {
+    const text = card.textContent || '';
+    // Game widgets have names like "Wend #10", "Zip #458" — hashtag + number pattern
+    if (/\b\w+\s+#\d+\b/.test(text)) return true;
+    // Sponsored / promoted content
+    if (/\bsponsored\b|\bpromoted\b|\bpublicité\b/i.test(text)) return true;
+    // componentkey patterns for known LinkedIn game/app widgets
+    const ck = card.getAttribute('componentkey') || '';
+    if (/game|app-promo|native-ad|sponsored/i.test(ck)) return true;
+    // Cards that have "/in/" links pointing to pages (company pages have /company/ not /in/)
+    // but game widgets use /in/ for their "app page" — detect by checking if ALL /in/ links
+    // on the card point to the same slug that looks like a game name (short, no spaces, + digits)
+    const links = [...card.querySelectorAll('a[href*="/in/"]')];
+    if (links.length > 0) {
+      const slugs = links.map(a => { const m = a.href.match(/\/in\/([^/?#]+)/); return m ? m[1] : ''; }).filter(Boolean);
+      // If every slug ends in a number pattern like "-10" or "wend-game" it's likely an ad
+      if (slugs.length > 0 && slugs.every(s => /\d{2,}$/.test(s) || /^(wend|zip|leet|chess|wordle|trivia)/i.test(s))) return true;
+    }
+    return false;
+  };
+
   const addCandidate = (card, source) => {
     if (candidates.length >= LIMIT) return;
+    // Skip LinkedIn game widgets and sponsored cards
+    if (isAdOrGameCard(card)) return;
     const slug = extractSlug(card);
     if (!slug || seenSlugs.has(slug)) return;
 
@@ -7739,6 +8677,9 @@ function scrapeNetworkingCandidatesInPage() {
       '[data-anonymize="person-name"]',
       'span.t-bold > span[aria-hidden="true"]',
       'strong',
+      // 2026 SDUI mynetwork: name is in a span[aria-hidden] directly inside the profile <a>
+      'a[href*="/in/"] > span[aria-hidden="true"]',
+      'a[href*="/in/"] span[aria-hidden="true"]',
     ]) {
       const el = card.querySelector(sel);
       if (el) {
@@ -7784,6 +8725,20 @@ function scrapeNetworkingCandidatesInPage() {
       }
     }
 
+    // 2026 new layout fallback: name/headline are bare <p><span>text</span></p> nodes
+    // with NO aria-hidden, NO semantic class — just plain unmarked spans inside the profile <a>.
+    // The mutual-connections line lives in a sibling div OUTSIDE the <a>, so it won't bleed in.
+    if (!name || !title) {
+      const profileLink = card.querySelector('a[href*="/in/"]');
+      if (profileLink) {
+        const pSpanTexts = [...profileLink.querySelectorAll('p > span')]
+          .map(el => normalize(el.textContent))
+          .filter(t => t.length >= 2 && !/connect|follow|message|pending|withdraw/i.test(t));
+        if (!name && pSpanTexts[0]) name = pSpanTexts[0];
+        if (!title && pSpanTexts[1]) title = pSpanTexts[1];
+      }
+    }
+
     if (!name) return;
     seenSlugs.add(slug);
 
@@ -7814,26 +8769,41 @@ function scrapeNetworkingCandidatesInPage() {
     for (const card of cards) addCandidate(card, 'search');
   }
 
-  if (isNetwork || isGrow) {
-    // People You May Know — broad selector
+  if (isNetwork || isGrow || isOrgPeople) {
+    // People You May Know + Suggestions + Company/School People tab —
+    // covers old and new LinkedIn layouts
     const cards = document.querySelectorAll([
+      // Legacy PYMK
       '.mn-pymk-list__item',
       '[data-view-name="pymk-card"]',
       '.discover-person-card',
       '[data-view-name*="pymk"]',
+      // 2024/2025 SDUI suggestion cards
+      '[data-view-name="member-relationships-member-card"]',
+      '[data-view-name*="suggestion"]',
+      '[data-view-name*="grow"]',
+      // Generic containers with profile link + name (broad net)
       '.artdeco-list__item:has(a[href*="/in/"])',
-      // 2025/2026: generic card containers with profile links
       'li:has(a[href*="/in/"]):has(button)',
-      'div[data-view-name*="suggestion"]:has(a[href*="/in/"])',
+      'li:has(a[href*="/in/"]):has(a[aria-label*="Connect" i])',
+      'li:has(a[href*="/in/"]):has(a[aria-label*="Follow" i])',
+      // 2025/2026: card wrapper divs
+      'div[data-member-id]:has(a[href*="/in/"])',
+      'div[data-urn]:has(a[href*="/in/"])',
       'section li:has(a[href*="/in/"])',
+      'div[class*="card"]:has(a[href*="/in/"])',
+      // 2026 SDUI mynetwork/org-people layout: role=listitem elements inside role=list
+      // (not assumed to be <div> — School/Company People tab can use other tags)
+      '[role="listitem"]:has(a[href*="/in/"])',
+      '[role="list"] > *:has(a[href*="/in/"])',
+      '[data-sdui-screen*="mynetwork"] div:has(a[href*="/in/"]):has(a[href*="/in/"] ~ div)',
     ].join(', '));
-    for (const card of cards) addCandidate(card, 'mynetwork');
+    for (const card of cards) addCandidate(card, isOrgPeople ? 'org_people' : 'mynetwork');
   }
 
   // Ultimate fallback: if no candidates found with specific selectors,
   // scan ALL elements with /in/ links (catches any LinkedIn layout)
   if (candidates.length === 0) {
-    // Find all links to profiles
     const profileLinks = document.querySelectorAll('a[href*="/in/"]');
     const processed = new Set();
     for (const link of profileLinks) {
@@ -7842,17 +8812,22 @@ function scrapeNetworkingCandidatesInPage() {
       if (!m || seenSlugs.has(m[1])) continue;
       // Walk up to find the card container (stop at body)
       let container = link.parentElement;
-      for (let i = 0; i < 6 && container && container !== document.body; i++) {
-        // Good container: has some text and likely a button
-        if (container.querySelector('button') && container.textContent.length > 20) break;
+      for (let i = 0; i < 8 && container && container !== document.body; i++) {
+        // Good container: has some text AND has a button OR another action link (Connect/Follow/Message)
+        // Also accept SDUI role=listitem divs which use plain <a> tags without aria-labels
+        const hasAction = container.querySelector('button') ||
+          container.querySelector('a[aria-label*="Connect" i], a[aria-label*="Follow" i], a[aria-label*="Message" i]');
+        const isSduiListItem = container.getAttribute('role') === 'listitem';
+        if ((hasAction || isSduiListItem) && container.textContent.length > 20) break;
         container = container.parentElement;
       }
       if (!container || container === document.body || processed.has(container)) continue;
       processed.add(container);
-      addCandidate(container, isSearch ? 'search' : 'mynetwork');
+      addCandidate(container, isSearch ? 'search' : (isOrgPeople ? 'org_people' : 'mynetwork'));
     }
   }
 
+  console.log(`[Subul IN] collectCandidates: found ${candidates.length} on ${url} (isSearch=${isSearch} isNetwork=${isNetwork} isGrow=${isGrow} isOrgPeople=${isOrgPeople})`);
   return candidates;
 }
 
@@ -8025,7 +9000,6 @@ function initGapTab() {
 
   // Mode tabs
   document.getElementById('gapModeProfile').addEventListener('click', () => _setGapMode('profile'));
-  document.getElementById('gapModeJD').addEventListener('click', () => _setGapMode('jd'));
   document.getElementById('gapModeJob').addEventListener('click', () => { _setGapMode('job'); _checkJobPageActive(); });
   document.getElementById('gapJDAnalyzeBtn').addEventListener('click', runGapAnalysisJD);
   document.getElementById('gapJobScrapeBtn').addEventListener('click', gapScrapeJob);
@@ -8040,7 +9014,7 @@ function initGapTab() {
     document.getElementById('gapIdle').classList.remove('gap-hidden');
     _setGapMode('job');
   });
-  document.getElementById('jfPdfBtn').addEventListener('click', () => window.print());
+  document.getElementById('jfPdfBtn').addEventListener('click', () => exportJobFitAsPdf());
   document.getElementById('gapRescrapeBtn').addEventListener('click', async () => {
     const confirmed = await showExtractionWarning();
     if (!confirmed) return;
@@ -8059,16 +9033,7 @@ function initGapTab() {
     document.getElementById('gapIdle').classList.remove('gap-hidden');
   });
   document.getElementById('gapExportBtn').addEventListener('click', () => {
-    if (!_lastGapRender) { exportElementAsImage('gapResult', 'linkedin-gap-analysis.png'); return; }
-    const html = _buildGapReportHTML(_lastGapRender.d, _lastGapRender.targetProfile, _lastGapRender.myP, false);
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'linkedin-gap-analysis.html';
-    a.click();
-    URL.revokeObjectURL(url);
-    toast('Report downloaded!', 'success', 2500);
+    exportElementAsImage('gapResult', 'linkedin-gap-analysis.png');
   });
 }
 
@@ -8196,21 +9161,64 @@ async function gapScrapeTarget() {
       } catch (e) { console.warn('[LinkedIn AI] Gap target retry failed:', e); }
     }
 
-    // ── Selective enrichment: only detail pages that are actually truncated ──
-    // Gap scoring uses headline/about/experience/skills. Skip education & certifications
-    // to save 6-10s per analysis without hurting score quality.
+    // ── Enrichment: detail pages for all key sections ──────────────────────
     document.querySelector('#gapLoading').innerHTML = '<span class="net-spinner"></span> Extracting...';
     const needsDetail = targetProfile._debug?._sectionsNeedingDetailPage || [];
     const toEnrich = [];
-    if (needsDetail.includes('skills') && (targetProfile.skills?.length || 0) < 15) toEnrich.push('skills');
-    if (needsDetail.includes('experience') && (targetProfile.experience?.length || 0) < 3) toEnrich.push('experience');
+    // Detect corrupt inline experience (feed posts parsed as jobs — no company/dates, long title).
+    const expLooksCorrupt = (targetProfile.experience || []).some(e =>
+      (!e.company && !e.dates && (e.title || '').length > 60) ||
+      /\b(reacted|reposted|commented|#\w+|others? reacted)\b/i.test(e.title + ' ' + e.description)
+    );
+    // Only visit the experience detail page if inline extraction looks corrupt or empty.
+    // The inline scraper now handles 3rd-party profiles correctly so avoid unnecessary navigation.
+    if (expLooksCorrupt || (targetProfile.experience || []).length === 0) toEnrich.push('experience');
+    // Only visit the education detail page if inline extraction found nothing.
+    if ((targetProfile.education || []).length === 0) toEnrich.push('education');
+    // Skills: always visit — the profile home page only shows top 3, detail page has all of them.
+    toEnrich.push('skills');
     if (toEnrich.length) {
       try {
-        await enrichWithDetailPages(tab.id, targetProfile, { sections: toEnrich, skipReturnNav: true });
+        // skipReturnNav:false — navigate back to the profile so the user
+        // lands where they started (and sees the correct profile page).
+        await enrichWithDetailPages(tab.id, targetProfile, { sections: toEnrich, skipReturnNav: false });
       } catch (enrichErr) {
         console.warn('[LinkedIn AI] Gap target enrichment failed, using inline data:', enrichErr);
       }
     }
+
+    // ── Post-enrichment sanity pass ──────────────────────────────────────
+    // If experience still contains feed-post garbage after enrichment, wipe it.
+    // This is a last-resort guard: better to show empty experience than nonsense.
+    const _isExpEntryGarbage = (e) =>
+      (!e.company && !e.dates && (e.title || '').length > 60) ||
+      /reacted|reposted|commented|and \d+ others|lnkd\.in|https?:\/\//i.test(
+        (e.title || '') + ' ' + (e.company || '') + ' ' + (e.description || '')
+      );
+    if ((targetProfile.experience || []).some(_isExpEntryGarbage)) {
+      console.warn('[GapScrape] Experience still contains garbage after enrichment — clearing');
+      targetProfile.experience = (targetProfile.experience || []).filter(e => !_isExpEntryGarbage(e));
+    }
+    // If education entries look like experience (have title/company but no school), wipe them
+    const _isEduEntryGarbage = (e) => !e.school && (e.title || e.company);
+    if ((targetProfile.education || []).some(_isEduEntryGarbage)) {
+      console.warn('[GapScrape] Education still contains garbage after enrichment — clearing');
+      targetProfile.education = (targetProfile.education || []).filter(e => !_isEduEntryGarbage(e));
+    }
+    // Skills: strip any remaining engagement-noise strings
+    if (targetProfile.skills?.length) {
+      targetProfile.skills = targetProfile.skills.filter(s =>
+        typeof s === 'string' &&
+        s.length >= 2 && s.length <= 80 &&
+        !/reacted|reposted|commented|and \d+ others|lnkd\.in|\d+\/\d+/i.test(s)
+      );
+    }
+    console.log('[GapScrape] Final:', {
+      exp: targetProfile.experience?.length,
+      edu: targetProfile.education?.length,
+      skills: targetProfile.skills?.length,
+      certs: targetProfile.certifications?.length,
+    });
 
     _gapScrapedTarget = targetProfile;
     _displayScrapedTarget(targetProfile);
@@ -8383,7 +9391,7 @@ function _buildGapReportHTML(d, target, me, printMode) {
     return `<div class="qw-item"><span class="qw-arrow">→</span><span class="qw-action">${e(w.action||'')}</span>${time}${badge}${diff}</div>`;
   }).join('');
 
-  const roadmap = toArr(d['90_day_roadmap']).map(item => {
+  const roadmap = toArr(d['30_day_roadmap']).map(item => {
     if (typeof item === 'string') return `<div class="rm-item"><span class="rm-week">–</span><div class="rm-body">${e(item)}</div></div>`;
     const result = item.expected_result ? `<div class="rm-result">${e(item.expected_result)}</div>` : '';
     return `<div class="rm-item"><span class="rm-week">Wk ${e(String(item.week||''))}</span><div class="rm-body"><strong>${e(item.action||'')}</strong>${result}</div></div>`;
@@ -8506,7 +9514,7 @@ h1,h2,h3{font-weight:700}
 .qw-diff-easy{background:transparent;border:1px solid #16a34a;color:#16a34a}
 .qw-diff-medium{background:transparent;border:1px solid #d97706;color:#d97706}
 .qw-diff-hard{background:transparent;border:1px solid #dc2626;color:#dc2626}
-/* 90-day roadmap */
+/* 30-day roadmap */
 .rm-item{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:12px}
 .rm-item:last-child{border:none}
 .rm-week{font-size:10px;font-weight:700;color:#0a66c2;min-width:42px;padding-top:2px;flex-shrink:0}
@@ -8627,8 +9635,8 @@ ${(() => {
   return `<div class="card"><div class="card-title">Connection Strategy</div><div class="strategy-text">${e(String(cs))}</div></div>`;
 })()}
 
-<!-- 90-Day Roadmap -->
-${roadmap ? `<div class="card"><div class="card-title">90-Day Roadmap</div>${roadmap}</div>` : ''}
+<!-- 30-Day Roadmap -->
+${roadmap ? `<div class="card"><div class="card-title">30-Day Roadmap</div>${roadmap}</div>` : ''}
 
 <div class="footer">Generated by LinkedIn AI Agent &mdash; ${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
 </body>
@@ -8831,6 +9839,8 @@ function _renderGapResult(d, targetProfile, myP) {
   // Skills
   const skGap = document.getElementById('gapSKGap');
   if (skGap) skGap.textContent = sec.skills?.gap || '';
+  const skInsight = document.getElementById('gapSKInsight');
+  if (skInsight) skInsight.textContent = sec.skills?.insight || '';
   const missingEl = document.getElementById('gapSkillsMissing');
   missingEl.innerHTML = (Array.isArray(sec.skills?.missing) ? sec.skills.missing : []).map(s => `<span class="gap-pill">${esc(typeof s === 'string' ? s : String(s))}</span>`).join('');
   const advEl = document.getElementById('gapSkillsAdv');
@@ -8864,19 +9874,7 @@ function _renderGapResult(d, targetProfile, myP) {
     heatmapSec.style.display = 'none';
   }
 
-  // Content
-  document.getElementById('gapCTAdvice').textContent = sec.content?.advice || '';
-  const ctStrategy = document.getElementById('gapCTStrategy');
-  if (ctStrategy) ctStrategy.textContent = sec.content?.content_strategy || '';
-
-  // ── Quick wins with impact + difficulty badges ──
-  document.getElementById('gapQuickWins').innerHTML = (Array.isArray(d.quick_wins) ? d.quick_wins : []).map(w => {
-    if (typeof w === 'string') return `<div class="gap-quick-win">${esc(w)}</div>`;
-    const time = w.time ? `<span class="gap-qw-time">${esc(w.time)}</span>` : '';
-    const impact = w.impact ? `<span class="gap-qw-impact gap-qw-impact-${esc(w.impact)}">${esc(w.impact)}</span>` : '';
-    const diff = w.difficulty ? `<span class="gap-qw-difficulty gap-qw-difficulty-${esc(w.difficulty)}">${esc(w.difficulty)}</span>` : '';
-    return `<div class="gap-quick-win">${esc(w.action || '')}${time}${impact}${diff}</div>`;
-  }).join('');
+  // (Content card and Quick Wins removed from UI)
 
   // -- Recruiter perspective --
   const recruiterEl = document.getElementById('gapRecruiter');
@@ -8936,11 +9934,11 @@ function _renderGapResult(d, targetProfile, myP) {
     contentEl.style.display = '';
   } else if (contentEl) { contentEl.style.display = 'none'; }
 
-  // ── 90-Day Roadmap (with expected results) ──
+  // ── 30-Day Roadmap (with expected results) ──
   const roadmapEl = document.getElementById('gapRoadmap');
-  const roadmap = Array.isArray(d['90_day_roadmap']) ? d['90_day_roadmap'] : [];
+  const roadmap = Array.isArray(d['30_day_roadmap']) ? d['30_day_roadmap'] : [];
   if (roadmapEl && roadmap.length > 0) {
-    roadmapEl.innerHTML = `<div class="gap-section-title">90-Day Roadmap</div>` +
+    roadmapEl.innerHTML = `<div class="gap-section-title">30-Day Roadmap</div>` +
       roadmap.map(item => {
         const result = item.expected_result ? `<div class="gap-roadmap-result">${esc(item.expected_result)}</div>` : '';
         return `<div class="gap-roadmap-item">
@@ -8964,37 +9962,7 @@ function _renderGapResult(d, targetProfile, myP) {
     '.gap-section:not(.gap-section-wins)', '#gapRecruiter',
     '#gapRoadmap', '#gapStrategySection',
   ];
-  let _gapSummaryMode = false;
-  const summaryToggleBtn = document.getElementById('gapSummaryToggle');
-  if (summaryToggleBtn) {
-    // Re-attach listener each render (replaces any prior listener by cloning node)
-    const freshBtn = summaryToggleBtn.cloneNode(true);
-    summaryToggleBtn.parentNode.replaceChild(freshBtn, summaryToggleBtn);
-    freshBtn.addEventListener('click', () => {
-      _gapSummaryMode = !_gapSummaryMode;
-      _GAP_DETAIL_SELECTORS.forEach(sel => {
-        document.querySelectorAll(sel).forEach(el => {
-          el.style.display = _gapSummaryMode ? 'none' : '';
-        });
-      });
-      freshBtn.textContent = _gapSummaryMode ? 'Full analysis' : 'Summary only';
-      freshBtn.classList.toggle('active', _gapSummaryMode);
-    });
-  }
 
-  // ── PDF export — open report in new tab so Ctrl+P works properly ──
-  const pdfBtn = document.getElementById('gapPdfBtn');
-  if (pdfBtn) {
-    const freshPdf = pdfBtn.cloneNode(true);
-    pdfBtn.parentNode.replaceChild(freshPdf, pdfBtn);
-    freshPdf.addEventListener('click', () => {
-      if (!_lastGapRender) { toast('Nothing to export yet.', 'warn'); return; }
-      const html = _buildGapReportHTML(_lastGapRender.d, _lastGapRender.targetProfile, _lastGapRender.myP, true);
-      const blob = new Blob([html], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      chrome.tabs.create({ url }, () => URL.revokeObjectURL(url));
-    });
-  }
 
 }
 
@@ -9643,7 +10611,11 @@ async function runJobFitAnalysis() {
   }
 }
 
+let _lastJobFitData = null;
+let _lastJobFitJob = null;
 function _renderJobFitResult(d, job) {
+  _lastJobFitData = d;
+  _lastJobFitJob = job;
   const score = Math.max(0, Math.min(100, d.fit_score || 0));
 
   // Score ring — circumference = 2π × r(45) ≈ 282.74

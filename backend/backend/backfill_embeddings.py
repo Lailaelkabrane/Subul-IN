@@ -1,19 +1,13 @@
 """
-backfill_embeddings.py — One-time RAG backfill for existing users (Enhancement 2).
+backfill_embeddings.py - One-time script to index existing user history for the RAG feature.
 
-Existing users have history but no embeddings (the write-path hook only indexes
-NEW documents from now on).  This script walks every embeddable source document
-already in Cosmos, generates its embedding, and stores it — so every existing
-user gains the AI Assistant memory feature retroactively, with no action on their
-part.
+New documents are indexed automatically when saved. This script handles existing
+documents that were created before the RAG feature was added.
 
-Run once after deploying the Enhancement 2 changes:
-
+Run once after deploying:
     python backfill_embeddings.py
 
-Idempotent: re-running is safe.  Each document is checked against Cosmos first
-(embedding_exists) and skipped if already indexed — nothing is re-embedded.
-You can interrupt and resume at any time.
+Safe to run multiple times - already indexed documents are skipped.
 """
 
 import asyncio
@@ -50,7 +44,7 @@ async def backfill() -> int:
             if not source_id:
                 continue
 
-            # Idempotency: skip anything already indexed.
+            # Skip documents that are already indexed
             try:
                 if await cosmos_db.embedding_exists(source_id):
                     type_counts["skipped"] += 1
@@ -60,7 +54,7 @@ async def backfill() -> int:
 
             built = cosmos_db.build_embedding_text(doc)
             if built is None:
-                type_counts["empty"] += 1  # nothing semantically useful to embed
+                type_counts["empty"] += 1  # document has no useful text to embed
                 continue
             text, meta = built
 

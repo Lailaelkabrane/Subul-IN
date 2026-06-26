@@ -1,5 +1,4 @@
-// Subul Auth Detection — Content Script
-// Runs on app.subul.uk to detect when the user successfully logs in.
+// Runs on app.subul.uk and detects when the user logs in by watching for a JWT token.
 
 (function () {
   'use strict';
@@ -30,13 +29,13 @@
   }
 
   function getSubulToken() {
-    // ── 1. Broad JWT scan across localStorage ──
+    // Check localStorage for a JWT token
     for (const key of Object.keys(localStorage)) {
       const val = localStorage.getItem(key);
       if (val && val.length > 40 && /^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(val.trim())) {
         return { key, token: val.trim(), src: 'localStorage' };
       }
-      // Value might be JSON with a token field inside
+      // Also check if the value is a JSON object containing a token field
       if (val && val.startsWith('{')) {
         try {
           const obj = JSON.parse(val);
@@ -49,7 +48,7 @@
       }
     }
 
-    // ── 2. Same for sessionStorage ──
+    // Check sessionStorage as well
     for (const key of Object.keys(sessionStorage)) {
       const val = sessionStorage.getItem(key);
       if (val && val.length > 40 && /^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(val.trim())) {
@@ -67,7 +66,7 @@
       }
     }
 
-    // ── 3. Cookie scan for JWT ──
+    // Check cookies for a JWT token
     for (const part of document.cookie.split(';')) {
       const [k, v] = part.trim().split('=');
       if (v && v.length > 40 && /^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(v)) {
@@ -145,7 +144,7 @@
   }
 
   function showLoginBanner(message) {
-    // Remove existing banner if any
+    // Remove any existing banner before showing a new one
     document.getElementById('subul-in-banner')?.remove();
     const banner = document.createElement('div');
     banner.id = 'subul-in-banner';

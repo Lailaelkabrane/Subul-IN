@@ -1,41 +1,28 @@
 """
-cosmos_db.py — Unified Azure Cosmos DB async client.
+cosmos_db.py - Azure Cosmos DB client for Subul IN.
 
 Database: EduTech_AI_Production / AgentLinkedin
 Partition key: /id
 
-Document types & ID patterns:
-  ┌─────────────────────────────┬──────────────────────────┬──────────────────────────────┐
-  │ Type                        │ ID format                │ Purpose                      │
-  ├─────────────────────────────┼──────────────────────────┼──────────────────────────────┤
-  │ user                        │ user:{email}             │ Auth, profile, subscription  │
-  │ usage_log                   │ log:{uuid}               │ API call telemetry           │
-  │ profile_snapshot            │ {uuid}                   │ Full LinkedIn profile scrape │
-  │ cache                       │ cache:{key}              │ TTL-based ephemeral data     │
-  │ networking_goal             │ netgoal:{user_id}        │ User networking preferences  │
-  │ connection_interaction      │ interact:{uuid}          │ Connect/skip feedback        │
-  │ linkedin_profile_cache      │ profile:{url_slug}       │ Lightweight candidate cache  │
-  │ message_performance         │ msg:{uuid}               │ Connection message tracking  │
-  │ network_outcome             │ outcome:{uuid}           │ 30-day follow-up value       │
-  │ ai_score_record             │ aiscore:{uuid}           │ AI profile scores (training) │
-  │ gap_analysis_record         │ gap:{uuid}               │ Gap analysis (training)      │
-  │ networking_analysis_record  │ netanalysis:{uuid}       │ Batch AI analysis (training) │
-  │ chat_record                 │ chat:{uuid}              │ Intent routing (training)    │
-  │ weekly_stats_record         │ weekly:{uuid}            │ Weekly activity summary      │
-  │ embedding_index             │ emb:{source_id}          │ RAG vector over user history │
-  └─────────────────────────────┴──────────────────────────┴──────────────────────────────┘
+Document types stored:
+  user                       - user accounts and profiles
+  usage_log                  - API call logs
+  profile_snapshot           - saved LinkedIn profiles
+  cache                      - short-lived cached data (auto-deleted by Cosmos TTL)
+  networking_goal            - user networking preferences
+  connection_interaction     - feedback on suggested connections
+  linkedin_profile_cache     - scraped candidate profiles
+  message_performance        - sent connection message tracking
+  network_outcome            - follow-up value ratings
+  ai_score_record            - AI profile scores
+  gap_analysis_record        - gap analysis results
+  networking_analysis_record - batch network analysis
+  chat_record                - chat assistant history
+  weekly_stats_record        - weekly activity summaries
+  embedding_index            - RAG vectors for user history
 
-RAG (Enhancement 2): high-signal documents (gap analyses, AI scores, networking
-analyses, chats, profile snapshots) are mirrored into `embedding_index` docs that
-store a 384-dim sentence-embedding vector.  rag_service.retrieve_context() reads
-these back to give the AI Assistant memory of the user's past activity.  Embedding
-generation is hooked into the save_* functions below, so every write path indexes
-automatically.
-
-Auth providers: "email" (default), "subul" (paid platform), "google", "linkedin"
-
-Per-user data: get_user_complete_data(user_doc_id) consolidates usage, networking,
-AI history, and snapshots into a single view for any user.
+All write functions also create an embedding_index entry so the chat
+assistant can recall past activity.
 """
 
 import asyncio
@@ -55,7 +42,7 @@ COSMOS_KEY            = os.getenv("AZURE_COSMOS_KEY", "")
 COSMOS_DB_NAME        = os.getenv("AZURE_COSMOS_DATABASE_NAME", "EduTech_AI_Production")
 COSMOS_CONTAINER_NAME = os.getenv("AZURE_COSMOS_CONTAINER_NAME", "AgentLinkedin")
 
-# Per-document TTLs (seconds) used to enforce retention policy promises.
+# TTL values in seconds used to auto-delete documents after a set period
 TTL_30_DAYS  = 30 * 24 * 60 * 60
 TTL_90_DAYS  = 90 * 24 * 60 * 60
 TTL_180_DAYS = 180 * 24 * 60 * 60
@@ -83,16 +70,9 @@ async def _get_container():
         id=COSMOS_CONTAINER_NAME,
         partition_key=PartitionKey(path="/id"),
     )
-    # Enable per-document TTL (needed for Cosmos DB cache to auto-expire).
-    # default_ttl=-1 means: no global expiry, but honour each document's "ttl" field.
-    #
-    # Also exclude the RAG embedding vector from indexing.  Each embedding_index
-    # doc holds a 384-number array; indexing it on every write wastes RU and
-    # storage and can hit Cosmos's indexing limits.  We never *filter* on the
-    # vector (we read it back and score in Python), so it never needs an index.
-    # Everything else stays indexed exactly as before.
-    #
-    # This is a no-op if already configured; wrapped in try/except for safety.
+    # Set default_ttl=-1 so each document can define its own expiry.
+    # Also exclude the embedding vector from indexing - it is a 384-number array
+    # that is never queried directly, so indexing it wastes storage and RU.
     try:
         await db.replace_container(
             container=_container_client,
@@ -128,12 +108,7 @@ def _to_int(val) -> int:
         return 0
 
 
-# ─────────────────────────────────────────────────────────
-#  COSMOS DB CACHE  (replaces Azure Redis Cache)
-#
-#  TTL documents: type="cache", id="cache:{key}", ttl=<seconds>
-#  Cosmos auto-deletes them when they expire — no cleanup needed.
-# ─────────────────────────────────────────────────────────
+# Cache helpers - Cosmos auto-deletes expired cache documents via TTL
 
 async def cache_get(key: str):
     """Return the cached value for key, or None on a miss or expiry."""
@@ -168,9 +143,7 @@ async def cache_delete(key: str):
         pass  # Already expired or never set
 
 
-# ─────────────────────────────────────────────────────────
-#  USERS
-# ─────────────────────────────────────────────────────────
+# User management
 
 def _user_id(email: str) -> str:
     return f"user:{email.lower().strip()}"
@@ -306,9 +279,7 @@ async def get_user_request_counts() -> dict:
     return counts
 
 
-# ─────────────────────────────────────────────────────────
-#  USAGE LOGS
-# ─────────────────────────────────────────────────────────
+# Usage log functions
 
 async def create_usage_log(
     user_doc_id: Optional[str],
@@ -339,7 +310,7 @@ async def create_usage_log(
         "ttl":           TTL_90_DAYS,
     }
     await container.create_item(body=doc)
-    # Bust the stats cache so the admin dashboard reflects this new log immediately
+    # Clear the stats cache so the admin dashboard shows fresh data
     await cache_delete("admin_stats")
     await cache_delete("user_request_counts")
     return log_id
@@ -367,9 +338,7 @@ async def list_logs(page: int = 1, page_size: int = 50) -> tuple[list, int]:
     return logs, total
 
 
-# ─────────────────────────────────────────────────────────
-#  ADMIN STATS (aggregated)
-# ─────────────────────────────────────────────────────────
+# Admin statistics
 
 async def get_admin_stats() -> dict:
     """Aggregated admin stats. Cached for 5 minutes to avoid full-table scans on every load."""
@@ -379,7 +348,7 @@ async def get_admin_stats() -> dict:
 
     container = await _get_container()
 
-    # Helper to count any document type — used concurrently below
+    # Helper to count documents by type, run in parallel
     async def _count_type(doc_type: str) -> int:
         n = 0
         async for v in container.query_items(
@@ -388,11 +357,11 @@ async def get_admin_stats() -> dict:
             n = v or 0
         return n
 
-    # Run user count + snapshot count concurrently while the main scan is prepared
+    # Run user and snapshot counts in parallel
     total_users_task = asyncio.ensure_future(_count_type("user"))
     total_snapshots_task = asyncio.ensure_future(_count_type("profile_snapshot"))
 
-    # Single full scan — all aggregates derived here (avoids 3 broken SUM/AVG queries)
+    # Single scan to compute all aggregates at once
     by_action: dict = {}
     by_model: dict = {}
     user_counts: dict = {}
@@ -457,12 +426,11 @@ async def get_admin_stats() -> dict:
         for e, n in sorted(user_counts.items(), key=lambda x: -x[1])[:10]
     ]
 
-    # Collect concurrent results
+    # Collect parallel results
     total_users = await total_users_task
     total_snapshots = await total_snapshots_task
 
-    # Cost estimation per model deployment (Azure OpenAI pricing per 1M tokens)
-    # GPT-4o: $2.50 input / $10.00 output, GPT-4o-mini: $0.15 input / $0.60 output
+    # Estimate cost per model based on Azure OpenAI pricing
     MODEL_COSTS = {
         "gpt-4o":      {"input": 2.50, "output": 10.00},
         "gpt-4o-mini": {"input": 0.15, "output": 0.60},
@@ -512,9 +480,7 @@ async def get_admin_stats() -> dict:
     return result
 
 
-# ─────────────────────────────────────────────────────────
-#  PROFILE SNAPSHOTS
-# ─────────────────────────────────────────────────────────
+# Profile snapshot functions
 
 async def save_profile_snapshot(
     profile_payload: dict,
@@ -620,12 +586,7 @@ async def get_all_snapshots(limit: int = 50, offset: int = 0) -> list:
     return items
 
 
-# ─────────────────────────────────────────────────────────
-#  NETWORKING — GOAL / ONBOARDING
-#
-#  type="networking_goal", id="netgoal:{user_id}"
-#  Stores the user's networking preferences set at onboarding.
-# ─────────────────────────────────────────────────────────
+# Networking goal / onboarding preferences
 
 async def upsert_networking_goal(user_id: str, goal_data: dict) -> dict:
     """Save or update the user's networking goal profile."""
@@ -658,12 +619,7 @@ async def get_networking_goal(user_id: str) -> Optional[dict]:
         return None
 
 
-# ─────────────────────────────────────────────────────────
-#  NETWORKING — CONNECTION INTERACTIONS
-#
-#  type="connection_interaction", id="interact:{uuid}"
-#  Logs every suggestion shown and the user's response.
-# ─────────────────────────────────────────────────────────
+# Connection interaction logs
 
 async def log_interaction(user_id: str, interaction_data: dict) -> str:
     container = await _get_container()
@@ -759,12 +715,7 @@ async def list_interactions(page: int = 1, page_size: int = 50) -> tuple[list, i
     return items, total
 
 
-# ─────────────────────────────────────────────────────────
-#  NETWORKING — LINKEDIN PROFILE CACHE
-#
-#  type="linkedin_profile_cache", id="profile:{url_slug}"
-#  Scraped candidate profiles discovered while user browses.
-# ─────────────────────────────────────────────────────────
+# Cached scraped LinkedIn profiles
 
 async def upsert_profile_cache(url_slug: str, profile_data: dict) -> dict:
     container = await _get_container()
@@ -803,12 +754,7 @@ async def get_profile_cache(url_slug: str) -> Optional[dict]:
         return None
 
 
-# ─────────────────────────────────────────────────────────
-#  NETWORKING — MESSAGE PERFORMANCE
-#
-#  type="message_performance", id="msg:{uuid}"
-#  Tracks sent messages and whether connection was accepted.
-# ─────────────────────────────────────────────────────────
+# Message performance tracking
 
 async def log_message_performance(user_id: str, message_data: dict) -> str:
     container = await _get_container()
@@ -840,12 +786,7 @@ async def update_message_outcome(msg_id: str, was_accepted: bool):
         pass
 
 
-# ─────────────────────────────────────────────────────────
-#  NETWORKING — NETWORK GROWTH OUTCOMES
-#
-#  type="network_outcome", id="outcome:{uuid}"
-#  30-day follow-up value ratings.
-# ─────────────────────────────────────────────────────────
+# Network growth outcome tracking
 
 async def log_network_outcome(user_id: str, outcome_data: dict) -> str:
     container = await _get_container()
@@ -865,12 +806,7 @@ async def log_network_outcome(user_id: str, outcome_data: dict) -> str:
     return doc_id
 
 
-# ─────────────────────────────────────────────────────────
-#  DATA PERSISTENCE — for future agent training
-#
-#  These records capture AI-generated outputs alongside
-#  inputs so we can fine-tune models and improve scoring.
-# ─────────────────────────────────────────────────────────
+# AI output records saved for model training and analysis
 
 async def save_ai_score(user_id: str, score_data: dict, profile_summary: dict) -> str:
     """Persist AI profile score for future model training."""
@@ -991,22 +927,11 @@ async def save_weekly_stats(user_id: str, stats: dict) -> str:
     return doc_id
 
 
-# ═════════════════════════════════════════════════════════
-#  RAG EMBEDDING INDEX  (Enhancement 2)
-#
-#  High-signal documents are mirrored into `embedding_index` docs holding a
-#  384-dim sentence-embedding vector.  These power rag_service.retrieve_context,
-#  which gives the AI Assistant memory of the user's past activity.
-#
-#  Storage is brute-force: at query time we pull all of a user's embedding docs
-#  (typically <300) and compute cosine similarity in Python.  No separate vector
-#  database is needed at this scale (see the Enhancement Guide).
-# ═════════════════════════════════════════════════════════
+# RAG embedding index - stores vectors for user history retrieval
 
 EMB_ID_PREFIX = "emb:"
 
-# Source document types worth embedding (high semantic signal).  Everything else
-# (usage logs, weekly stats, cache) is skipped — it has no useful meaning to recall.
+# Document types that should be embedded for the RAG feature
 _EMBEDDABLE_TYPES = {
     "gap_analysis_record",
     "ai_score_record",
@@ -1020,11 +945,7 @@ def _clip(text: str, limit: int = 500) -> str:
     return (text or "").strip()[:limit]
 
 
-# ── Per-type summary builders ────────────────────────────────────────────────
-#
-# Each returns (summary_text, metadata).  The summary is a short, dense
-# representation of what makes the document semantically interesting — NOT a
-# verbatim JSON dump.  Better summaries produce better retrieval.
+# Builders that create a short text summary from each document type for embedding
 
 def _summarize_gap_analysis(doc: dict) -> tuple[str, dict]:
     target = doc.get("target_name", "") or "a profile"
@@ -1032,7 +953,7 @@ def _summarize_gap_analysis(doc: dict) -> tuple[str, dict]:
     score = doc.get("overall_gap_score", "")
     insight = doc.get("key_insight", "")
 
-    # Critical gap names live in the per-section breakdown.
+    # Include section-level gap details
     sections = doc.get("sections", {}) or {}
     gap_names: list[str] = []
     if isinstance(sections, dict):
@@ -1044,7 +965,7 @@ def _summarize_gap_analysis(doc: dict) -> tuple[str, dict]:
                 gap_names.append(str(sec.get("name") or sec.get("title") or ""))
     gap_names = [g for g in gap_names if g][:6]
 
-    # Quick win titles.
+    # Include quick win action titles
     quick_titles: list[str] = []
     for qw in (doc.get("quick_wins") or [])[:6]:
         if isinstance(qw, dict):
@@ -1121,8 +1042,7 @@ def _summarize_profile_snapshot(doc: dict) -> tuple[str, dict]:
     about = (doc.get("about") or "").strip()
     meta = {"name": name, "headline": _clip(headline, 200)}
 
-    # Only the headline + about carry semantic signal.  With neither, there is
-    # nothing worth recalling — return empty so build_embedding_text skips it.
+    # Skip if there is no useful text to embed
     if not headline and not about:
         return "", meta
 
@@ -1161,7 +1081,7 @@ def build_embedding_text(doc: dict) -> Optional[tuple[str, dict]]:
     return text, meta
 
 
-# ── Storage / retrieval helpers ──────────────────────────────────────────────
+# Embedding storage and retrieval
 
 async def embedding_exists(source_id: str) -> bool:
     """True if an embedding_index doc already exists for *source_id* (idempotency)."""
@@ -1222,7 +1142,7 @@ async def save_embedding(
     }
     if ttl is not None:
         doc["ttl"] = ttl  # match the source's expiry; omit entirely = never expires
-    # upsert so a re-index (skip_if_exists=False) overwrites cleanly
+    # Upsert so re-indexing replaces the old embedding cleanly
     await container.upsert_item(body=doc)
     return emb_id
 
@@ -1314,7 +1234,7 @@ async def delete_user_data(user_doc_id: str) -> dict:
     """
     container = await _get_container()
 
-    # Collect every doc owned by this user (any type, including embedding_index).
+    # Load all documents belonging to this user
     owned_ids: list[str] = []
     embedding_count = 0
     async for item in container.query_items(
@@ -1333,7 +1253,7 @@ async def delete_user_data(user_doc_id: str) -> dict:
         except Exception:
             pass
 
-    # Finally remove the account document itself (id == user_doc_id).
+    # Delete the user account document last
     user_deleted = 0
     try:
         await container.delete_item(item=user_doc_id, partition_key=user_doc_id)
@@ -1354,8 +1274,7 @@ async def iter_documents_by_type(doc_type: str):
         yield item
 
 
-# Source document types that the RAG backfill should index.  Exposed so the
-# one-time backfill script and the live write-path hook stay in sync.
+# Types used by backfill_embeddings.py and the live write hooks - must match
 EMBEDDABLE_SOURCE_TYPES = sorted(_EMBEDDABLE_TYPES)
 
 
@@ -1414,13 +1333,7 @@ async def backfill_all_embeddings() -> dict:
     return totals
 
 
-# ─────────────────────────────────────────────────────────
-#  SUBUL USERS
-#
-#  Users authenticated via the Subul platform (auth_provider="subul").
-#  These are tracked separately because they come from a paid external
-#  subscription service and need dedicated management.
-# ─────────────────────────────────────────────────────────
+# Subul platform user management (paid external auth provider)
 
 async def list_subul_users(page: int = 1, page_size: int = 20) -> tuple[list, int]:
     """List all users who registered via Subul, paginated."""
@@ -1459,14 +1372,14 @@ async def get_subul_stats() -> dict:
     container = await _get_container()
     total_subul = await count_subul_users()
 
-    # Count active vs inactive
+    # Count active and inactive Subul users
     active = 0
     async for v in container.query_items(
         "SELECT VALUE COUNT(1) FROM c WHERE c.type = 'user' AND c.auth_provider = 'subul' AND c.is_active = true",
     ):
         active = v
 
-    # Count Subul users' API usage
+    # Count API calls from Subul users
     subul_emails = []
     async for item in container.query_items(
         "SELECT c.email FROM c WHERE c.type = 'user' AND c.auth_provider = 'subul'",
@@ -1495,20 +1408,14 @@ async def get_subul_stats() -> dict:
     return result
 
 
-# ─────────────────────────────────────────────────────────
-#  PER-USER DATA TRACKING
-#
-#  Consolidates ALL data for a single user across all
-#  document types into one view — usage, snapshots,
-#  networking activity, AI analyses, etc.
-# ─────────────────────────────────────────────────────────
+# Per-user data aggregation
 
 async def get_user_full_profile(user_doc_id: str) -> dict:
     """Retrieve the user document with all metadata."""
     user = await get_user_by_id(user_doc_id)
     if not user:
         return {}
-    # Strip Cosmos system fields for clean output
+    # Remove Cosmos internal fields before returning
     return {
         "id":            user.get("id"),
         "email":         user.get("email"),
@@ -1569,7 +1476,7 @@ async def get_user_networking_stats(user_doc_id: str) -> dict:
     """Networking activity for a single user."""
     container = await _get_container()
 
-    # Interactions
+    # Load interaction history
     connected = 0
     skipped = 0
     async for item in container.query_items(
